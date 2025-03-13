@@ -12,4 +12,4 @@ RUN pip install uv && \
 
 EXPOSE 8002
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]
+CMD ["./.venv/bin/uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]

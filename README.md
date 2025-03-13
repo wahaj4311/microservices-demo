@@ -1,65 +1,119 @@
-# Microservices Demo with UV
+# Microservices Demo on Azure Kubernetes Service (AKS)
 
-This is a simple microservices architecture demonstration using FastAPI and UV package manager. The project consists of multiple services that work together to create a complete application.
+This project demonstrates a microservices architecture deployed on Azure Kubernetes Service (AKS) with a complete CI/CD pipeline using Azure DevOps.
 
-## Services
+## Architecture
 
-1. **API Gateway** - Entry point for all client requests
-2. **Auth Service** - Handles user authentication and authorization
-3. **Product Service** - Manages product catalog and inventory
-4. **Order Service** - Handles order processing and management
+The application consists of the following microservices:
 
-## Technology Stack
+- **API Gateway**: Entry point for all client requests
+- **Auth Service**: Handles authentication and authorization
+- **Product Service**: Manages product data
+- **Order Service**: Processes orders
 
-- Python 3.11+
-- FastAPI
-- UV (Package Manager)
-- Docker
-- Redis (for service communication)
-- PostgreSQL (for data storage)
+## Infrastructure
 
-## Project Structure
+The infrastructure is provisioned using Terraform and includes:
+
+- **Azure Kubernetes Service (AKS)**: For orchestrating the microservices
+- **Azure Container Registry (ACR)**: For storing Docker images
+- **Virtual Network**: For secure networking
+- **Azure Monitor**: For monitoring and logging
+
+## Directory Structure
 
 ```
-microservices-demo/
-├── api-gateway/
-├── auth-service/
-├── product-service/
-├── order-service/
-└── shared/
+├── api-gateway/           # API Gateway service
+├── auth-service/          # Authentication service
+├── product-service/       # Product management service
+├── order-service/         # Order processing service
+├── k8s/                   # Kubernetes manifests
+├── terraform/             # Terraform infrastructure code
+│   ├── modules/           # Terraform modules
+│   │   ├── aks/           # AKS module
+│   │   ├── acr/           # ACR module
+│   │   ├── networking/    # Networking module
+│   │   └── monitoring/    # Monitoring module
+│   ├── main.tf            # Main Terraform configuration
+│   ├── variables.tf       # Terraform variables
+│   └── outputs.tf         # Terraform outputs
+├── azure-pipelines.yml    # Azure DevOps pipeline configuration
+├── connect-to-aks.sh      # Script to connect to AKS cluster
+└── README.md              # This file
 ```
 
-## Setup Instructions
+## Getting Started
 
-1. Install UV package manager:
+### Prerequisites
+
+- [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli)
+- [Terraform](https://www.terraform.io/downloads.html)
+- [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
+- [Docker](https://docs.docker.com/get-docker/)
+- Azure subscription
+
+### Deploying the Infrastructure
+
+1. **Login to Azure**
+
    ```bash
-   pip install uv
+   az login
    ```
 
-2. Install dependencies for each service:
+2. **Initialize Terraform**
+
    ```bash
-   cd [service-directory]
-   uv venv
-   uv pip install -r requirements.txt
+   cd terraform
+   terraform init
    ```
 
-3. Start the services:
+3. **Apply Terraform Configuration**
+
    ```bash
-   docker-compose up
+   terraform plan -out=tfplan
+   terraform apply tfplan
    ```
+
+4. **Connect to AKS Cluster**
+
+   ```bash
+   ../connect-to-aks.sh
+   ```
+
+### Setting Up CI/CD Pipeline
+
+1. Create a project in Azure DevOps
+2. Import this repository
+3. Create service connections to Azure and AKS
+4. Set up the pipeline using the `azure-pipelines.yml` file
 
 ## Development
 
-Each service is independently deployable and follows these principles:
-- Loose coupling
-- High cohesion
-- Independent data storage
-- RESTful communication
+### Building and Running Locally
 
-## API Documentation
+Each microservice can be built and run locally using Docker:
 
-Once the services are running, you can access the API documentation at:
-- API Gateway: http://localhost:8000/docs
-- Auth Service: http://localhost:8001/docs
-- Product Service: http://localhost:8002/docs
-- Order Service: http://localhost:8003/docs
+```bash
+# Build API Gateway
+cd api-gateway
+docker build -t api-gateway .
+docker run -p 8080:80 api-gateway
+```
+
+### Deploying to AKS Manually
+
+You can deploy the microservices to AKS manually using kubectl:
+
+```bash
+kubectl apply -f k8s/
+```
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- Microsoft Azure Documentation
+- Kubernetes Documentation
+- Terraform Documentation

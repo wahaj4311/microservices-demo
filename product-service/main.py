@@ -7,6 +7,7 @@ import os
 from dotenv import load_dotenv
 import redis
 from typing import List, Optional
+import json
 
 load_dotenv()
 
@@ -53,6 +54,9 @@ class ProductResponse(ProductBase):
     class Config:
         from_attributes = True
 
+class StockUpdate(BaseModel):
+    stock_change: int
+
 # Dependency
 def get_db():
     db = SessionLocal()
@@ -61,23 +65,36 @@ def get_db():
     finally:
         db.close()
 
-# Cache decorator
 def cache_response(expire_time=300):
     def decorator(func):
         async def wrapper(*args, **kwargs):
-            # Create cache key from function name and arguments
-            cache_key = f"{func.__name__}:{str(args)}:{str(kwargs)}"
+            # Create a simpler cache key
+            cache_key = f"{func.__name__}"
+            if 'product_id' in kwargs:
+                cache_key += f":{kwargs['product_id']}"
             
             # Try to get from cache
             cached_result = redis_client.get(cache_key)
             if cached_result:
-                return eval(cached_result)
+                return json.loads(cached_result)
             
             # If not in cache, execute function
             result = await func(*args, **kwargs)
             
-            # Store in cache
-            redis_client.setex(cache_key, expire_time, str(result))
+            # Convert to dict if it's a SQLAlchemy model
+            if hasattr(result, '__dict__'):
+                result_dict = dict(result.__dict__)
+                if '_sa_instance_state' in result_dict:
+                    del result_dict['_sa_instance_state']
+                redis_client.setex(cache_key, expire_time, json.dumps(result_dict))
+            else:
+                # Handle list of products
+                result_list = [dict(r.__dict__) for r in result]
+                for r in result_list:
+                    if '_sa_instance_state' in r:
+                        del r['_sa_instance_state']
+                redis_client.setex(cache_key, expire_time, json.dumps(result_list))
+            
             return result
         return wrapper
     return decorator
@@ -94,13 +111,11 @@ async def create_product(product: ProductCreate, db: Session = Depends(get_db)):
     return db_product
 
 @app.get("/products/", response_model=List[ProductResponse])
-@cache_response(expire_time=300)
 async def get_products(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     products = db.query(Product).offset(skip).limit(limit).all()
     return products
 
 @app.get("/products/{product_id}", response_model=ProductResponse)
-@cache_response(expire_time=300)
 async def get_product(product_id: int, db: Session = Depends(get_db)):
     product = db.query(Product).filter(Product.id == product_id).first()
     if product is None:
@@ -139,12 +154,12 @@ async def delete_product(product_id: int, db: Session = Depends(get_db)):
     return {"message": "Product deleted"}
 
 @app.put("/products/{product_id}/stock")
-async def update_stock(product_id: int, stock_change: int, db: Session = Depends(get_db)):
+async def update_stock(product_id: int, stock_update: StockUpdate, db: Session = Depends(get_db)):
     db_product = db.query(Product).filter(Product.id == product_id).first()
     if db_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
     
-    new_stock = db_product.stock + stock_change
+    new_stock = db_product.stock + stock_update.stock_change
     if new_stock < 0:
         raise HTTPException(status_code=400, detail="Insufficient stock")
     
