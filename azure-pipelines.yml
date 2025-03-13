@@ -16,7 +16,7 @@ variables:
   
   # Kubernetes service connection
   kubernetesServiceConnection: 'aks-service-connection'
-  namespace: 'default'
+  namespace: 'microservices-demo'
 
 stages:
 - stage: Build
@@ -88,7 +88,6 @@ stages:
       runOnce:
         deploy:
           steps:
-          # Use kubectl directly instead of deprecated KubernetesManifest task
           - task: Kubernetes@1
             displayName: Deploy to Kubernetes cluster
             inputs:
@@ -97,16 +96,14 @@ stages:
               namespace: '$(namespace)'
               command: 'apply'
               useConfigurationFile: true
-              configurationType: 'inline'
               inline: |
-                # API Gateway Deployment
                 apiVersion: apps/v1
                 kind: Deployment
                 metadata:
                   name: api-gateway
                   namespace: $(namespace)
                 spec:
-                  replicas: 1
+                  replicas: 2
                   selector:
                     matchLabels:
                       app: api-gateway
@@ -121,7 +118,6 @@ stages:
                         ports:
                         - containerPort: 80
                 ---
-                # API Gateway Service
                 apiVersion: v1
                 kind: Service
                 metadata:
@@ -131,18 +127,16 @@ stages:
                   type: LoadBalancer
                   ports:
                   - port: 80
-                    targetPort: 80
                   selector:
                     app: api-gateway
                 ---
-                # Auth Service Deployment
                 apiVersion: apps/v1
                 kind: Deployment
                 metadata:
                   name: auth-service
                   namespace: $(namespace)
                 spec:
-                  replicas: 1
+                  replicas: 2
                   selector:
                     matchLabels:
                       app: auth-service
@@ -157,28 +151,24 @@ stages:
                         ports:
                         - containerPort: 80
                 ---
-                # Auth Service Service
                 apiVersion: v1
                 kind: Service
                 metadata:
                   name: auth-service
                   namespace: $(namespace)
                 spec:
-                  type: ClusterIP
                   ports:
                   - port: 80
-                    targetPort: 80
                   selector:
                     app: auth-service
                 ---
-                # Product Service Deployment
                 apiVersion: apps/v1
                 kind: Deployment
                 metadata:
                   name: product-service
                   namespace: $(namespace)
                 spec:
-                  replicas: 1
+                  replicas: 2
                   selector:
                     matchLabels:
                       app: product-service
@@ -193,28 +183,24 @@ stages:
                         ports:
                         - containerPort: 80
                 ---
-                # Product Service Service
                 apiVersion: v1
                 kind: Service
                 metadata:
                   name: product-service
                   namespace: $(namespace)
                 spec:
-                  type: ClusterIP
                   ports:
                   - port: 80
-                    targetPort: 80
                   selector:
                     app: product-service
                 ---
-                # Order Service Deployment
                 apiVersion: apps/v1
                 kind: Deployment
                 metadata:
                   name: order-service
                   namespace: $(namespace)
                 spec:
-                  replicas: 1
+                  replicas: 2
                   selector:
                     matchLabels:
                       app: order-service
@@ -229,16 +215,13 @@ stages:
                         ports:
                         - containerPort: 80
                 ---
-                # Order Service Service
                 apiVersion: v1
                 kind: Service
                 metadata:
                   name: order-service
                   namespace: $(namespace)
                 spec:
-                  type: ClusterIP
                   ports:
                   - port: 80
-                    targetPort: 80
                   selector:
                     app: order-service 
