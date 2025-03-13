@@ -12,11 +12,13 @@ spec:
       labels:
         app: api-gateway
     spec:
+      imagePullSecrets:
+      - name: acr-secret
       containers:
       - name: api-gateway
-        image: nginx:latest
+        image: microservicesdemodevacred7ulf27.azurecr.io/microservices-demo/api-gateway:latest
         ports:
-        - containerPort: 80
+        - containerPort: 8000
         resources:
           requests:
             cpu: "100m"
@@ -27,19 +29,19 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: 80
+            port: 8000
           initialDelaySeconds: 5
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /ready
-            port: 80
+            port: 8000
           initialDelaySeconds: 5
           periodSeconds: 10
         env:
         - name: AUTH_SERVICE_URL
-          value: "http://auth-service:80"
+          value: "http://auth-service:8001"
         - name: PRODUCT_SERVICE_URL
-          value: "http://product-service:80"
+          value: "http://product-service:8002"
         - name: ORDER_SERVICE_URL
-          value: "http://order-service:80" 
+          value: "http://order-service:8003" 

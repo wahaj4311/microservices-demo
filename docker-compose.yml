@@ -6,7 +6,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - AUTH_SERVICE_URL=http://auth_service:8001
+      - AUTH_SERVICE_URL=http://auth-service:8001
       - PRODUCT_SERVICE_URL=http://product-service:8002
       - ORDER_SERVICE_URL=http://order-service:8003
     depends_on:
@@ -19,7 +19,7 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres-auth:5432/auth_db
+      - SQLALCHEMY_DATABASE_URL=postgresql://postgres:postgres@postgres-auth:5432/auth_db
       - REDIS_URL=redis://redis:6379/0
 
     depends_on:
@@ -31,7 +31,7 @@ services:
     ports:
       - "8002:8002"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres-product:5432/product_db
+      - SQLALCHEMY_DATABASE_URL=postgresql://postgres:postgres@postgres-product:5432/product_db
       - REDIS_URL=redis://redis:6379/1
     depends_on:
       - postgres-product
@@ -42,7 +42,7 @@ services:
     ports:
       - "8003:8003"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres-order:5432/order_db
+      - SQLALCHEMY_DATABASE_URL=postgresql://postgres:postgres@postgres-order:5432/order_db
       - REDIS_URL=redis://redis:6379/2
     depends_on:
       - postgres-order

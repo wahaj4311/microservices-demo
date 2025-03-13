@@ -6,12 +6,56 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-app = FastAPI(title="API Gateway", description="Main entry point for the microservices application")
+app = FastAPI(
+    title="API Gateway",
+    description="Main entry point for the microservices application",
+    redirect_slashes=False
+)
 
 # Service URLs from environment variables
 AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://localhost:8001")
 PRODUCT_SERVICE_URL = os.getenv("PRODUCT_SERVICE_URL", "http://localhost:8002")
 ORDER_SERVICE_URL = os.getenv("ORDER_SERVICE_URL", "http://localhost:8003")
+
+@app.get("/health")
+async def health_check():
+    try:
+        # Check all service connections
+        async with httpx.AsyncClient() as client:
+            services = {
+                "auth": AUTH_SERVICE_URL,
+                "product": PRODUCT_SERVICE_URL,
+                "order": ORDER_SERVICE_URL
+            }
+            
+            for name, url in services.items():
+                response = await client.get(f"{url}/health")
+                if response.status_code != 200:
+                    raise HTTPException(status_code=503, detail=f"{name} service unhealthy")
+        
+        return {"status": "healthy"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+@app.get("/ready")
+async def readiness_check():
+    try:
+        # Check all service connections
+        async with httpx.AsyncClient() as client:
+            services = {
+                "auth": AUTH_SERVICE_URL,
+                "product": PRODUCT_SERVICE_URL,
+                "order": ORDER_SERVICE_URL
+            }
+            
+            for name, url in services.items():
+                response = await client.get(f"{url}/ready")
+                if response.status_code != 200:
+                    raise HTTPException(status_code=503, detail=f"{name} service not ready")
+        
+        return {"status": "ready"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 @app.get("/")
 async def root():

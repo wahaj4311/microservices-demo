@@ -14,7 +14,7 @@ import json
 load_dotenv()
 
 # Database setup
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+SQLALCHEMY_DATABASE_URL = os.getenv("SQLALCHEMY_DATABASE_URL")
 PRODUCT_SERVICE_URL = os.getenv("PRODUCT_SERVICE_URL", "http://product-service:8002")
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
@@ -22,6 +22,42 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 app = FastAPI(title="Order Service", description="Order Processing and Management")
+
+@app.get("/health")
+async def health_check():
+    try:
+        # Check database connection
+        db = SessionLocal()
+        db.execute("SELECT 1")
+        db.close()
+        
+        # Check product service connection
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{PRODUCT_SERVICE_URL}/health")
+            if response.status_code != 200:
+                raise HTTPException(status_code=503, detail="Product service unhealthy")
+        
+        return {"status": "healthy"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+@app.get("/ready")
+async def readiness_check():
+    try:
+        # Check database connection
+        db = SessionLocal()
+        db.execute("SELECT 1")
+        db.close()
+        
+        # Check product service connection
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{PRODUCT_SERVICE_URL}/health")
+            if response.status_code != 200:
+                raise HTTPException(status_code=503, detail="Product service not ready")
+        
+        return {"status": "ready"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 # Enums
 class OrderStatus(str, enum.Enum):

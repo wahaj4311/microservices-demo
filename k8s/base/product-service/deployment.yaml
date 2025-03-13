@@ -12,11 +12,13 @@ spec:
       labels:
         app: product-service
     spec:
+      imagePullSecrets:
+      - name: acr-secret
       containers:
       - name: product-service
-        image: nginx:latest
+        image: microservicesdemodevacred7ulf27.azurecr.io/microservices-demo/product-service:latest
         ports:
-        - containerPort: 80
+        - containerPort: 8002
         resources:
           requests:
             cpu: "100m"
@@ -27,18 +29,20 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: 80
+            port: 8002
           initialDelaySeconds: 5
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /ready
-            port: 80
+            port: 8002
           initialDelaySeconds: 5
           periodSeconds: 10
         env:
-        - name: DATABASE_URL
+        - name: SQLALCHEMY_DATABASE_URL
           valueFrom:
             secretKeyRef:
               name: product-secrets
-              key: database-url 
+              key: SQLALCHEMY_DATABASE_URL
+        - name: REDIS_URL
+          value: "redis://redis:6379/1" 
