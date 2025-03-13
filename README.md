@@ -2,6 +2,33 @@
 
 This project demonstrates a microservices architecture deployed on Azure Kubernetes Service (AKS) with a complete CI/CD pipeline using Azure DevOps.
 
+## Setting up Azure DevOps Agent
+
+To set up the self-hosted Azure DevOps agent:
+
+1. Set the required environment variables:
+   ```bash
+   export AZURE_DEVOPS_ORG='your-org-name'  # e.g., 'umairgl123'
+   export AZURE_DEVOPS_PAT='your-pat-token'  # Your Personal Access Token
+   ```
+
+2. Run the setup script:
+   ```bash
+   ./scripts/setup-agent.sh
+   ```
+
+   The script will:
+   - Install necessary dependencies
+   - Download and configure the Azure DevOps agent
+   - Install and start the agent service
+
+3. Verify the agent is running:
+   ```bash
+   sudo ./svc.sh status
+   ```
+
+**Important**: Never commit sensitive information like PAT tokens to the repository. Always use environment variables for sensitive data.
+
 ## Architecture
 
 The application consists of the following microservices:

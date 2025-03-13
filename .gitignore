@@ -8,6 +8,17 @@ terraform.tfstate.backup
 
 # Azure
 .azure/
+.env
+azagent/
+
+# Azure DevOps Agent
+.agent
+.credentials
+.credentials_rsaparams
+.path
+.env.*
+*.pat
+agent.env
 
 # Kubernetes
 kubeconfig
