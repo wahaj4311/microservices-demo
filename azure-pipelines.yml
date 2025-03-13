@@ -25,7 +25,7 @@ stages:
   - job: BuildAndPush
     displayName: Build and Push
     pool:
-      vmImage: 'ubuntu-latest'
+      name: 'Default'  # Using our self-hosted agent pool
     steps:
     # API Gateway
     - task: Docker@2
@@ -82,7 +82,7 @@ stages:
   - deployment: DeployToAKS
     displayName: Deploy to AKS
     pool:
-      vmImage: 'ubuntu-latest'
+      name: 'Default'  # Using our self-hosted agent pool
     environment: 'development'
     strategy:
       runOnce:
