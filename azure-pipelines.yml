@@ -107,218 +107,214 @@ stages:
   displayName: Deploy to AKS
   dependsOn: Build
   jobs:
-  - deployment: DeployToAKS
+  - job: DeployToAKS
     displayName: Deploy to AKS
     pool:
-      vmImage: 'ubuntu-latest'  # Using Azure-hosted agent instead of self-hosted
-    environment: 'development'
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          # Replace Kubernetes tasks with script that uses az CLI for authentication
-          - task: AzureCLI@2
-            displayName: Deploy to AKS using az CLI
-            inputs:
-              azureSubscription: 'azure-subscription-service-connection'
-              scriptType: 'bash'
-              scriptLocation: 'inlineScript'
-              inlineScript: |
-                # Get AKS credentials
-                az aks get-credentials --resource-group $(resourceGroupName) --name $(clusterName) --overwrite-existing
-                
-                # Create namespace if it doesn't exist
-                kubectl create namespace $(namespace) --dry-run=client -o yaml | kubectl apply -f -
-                
-                # Apply Kubernetes manifests with validation disabled
-                cat <<EOF | kubectl apply -f - --validate=false
-                apiVersion: apps/v1
-                kind: Deployment
-                metadata:
-                  name: api-gateway
-                  namespace: $(namespace)
-                spec:
-                  replicas: 2
-                  selector:
-                    matchLabels:
-                      app: api-gateway
-                  template:
-                    metadata:
-                      labels:
-                        app: api-gateway
-                    spec:
-                      # Added imagePullSecrets
-                      imagePullSecrets:
-                      - name: acr-secret
-                      containers:
-                      - name: api-gateway
-                        image: $(containerRegistry)/$(imageRepository)/api-gateway:$(tag)
-                        ports:
-                        # Changed port from 80 to 8000
-                        - containerPort: 8000
-                        # Added environment variables
-                        env:
-                        - name: AUTH_SERVICE_URL
-                          value: "http://auth-service:8001"
-                        - name: PRODUCT_SERVICE_URL
-                          value: "http://product-service:8002"
-                        - name: ORDER_SERVICE_URL
-                          value: "http://order-service:8003"
-                ---
-                apiVersion: v1
-                kind: Service
-                metadata:
-                  name: api-gateway
-                  namespace: $(namespace)
-                spec:
-                  type: LoadBalancer
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: Kubernetes@1
+      displayName: Deploy to AKS
+      inputs:
+        connectionType: 'Kubernetes Service Connection'
+        kubernetesServiceConnection: '$(kubernetesServiceConnection)'
+        namespace: '$(namespace)'
+        command: 'apply'
+        useConfigurationFile: true
+        configuration: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: api-gateway
+            namespace: $(namespace)
+          spec:
+            replicas: 2
+            selector:
+              matchLabels:
+                app: api-gateway
+            template:
+              metadata:
+                labels:
+                  app: api-gateway
+              spec:
+                imagePullSecrets:
+                - name: acr-secret
+                containers:
+                - name: api-gateway
+                  image: $(containerRegistry)/$(imageRepository)/api-gateway:$(tag)
                   ports:
-                  # Changed port from 80 to 8000
-                  - port: 8000
-                    targetPort: 8000
-                  selector:
-                    app: api-gateway
-                ---
-                apiVersion: apps/v1
-                kind: Deployment
-                metadata:
-                  name: auth-service
-                  namespace: $(namespace)
-                spec:
-                  replicas: 2
-                  selector:
-                    matchLabels:
-                      app: auth-service
-                  template:
-                    metadata:
-                      labels:
-                        app: auth-service
-                    spec:
-                      # Added imagePullSecrets
-                      imagePullSecrets:
-                      - name: acr-secret
-                      containers:
-                      - name: auth-service
-                        image: $(containerRegistry)/$(imageRepository)/auth-service:$(tag)
-                        ports:
-                        # Changed port from 80 to 8001
-                        - containerPort: 8001
-                        # Added environment variables
-                        env:
-                        - name: SQLALCHEMY_DATABASE_URL
-                          valueFrom:
-                            secretKeyRef:
-                              name: auth-secrets
-                              key: SQLALCHEMY_DATABASE_URL
-                        - name: REDIS_URL
-                          value: "redis://redis:6379/0"
-                ---
-                apiVersion: v1
-                kind: Service
-                metadata:
-                  name: auth-service
-                  namespace: $(namespace)
-                spec:
-                  ports:
-                  # Changed port from 80 to 8001
-                  - port: 8001
-                    targetPort: 8001
-                  selector:
+                  - containerPort: 8000
+                  env:
+                  - name: AUTH_SERVICE_URL
+                    value: "http://auth-service:8001"
+                  - name: PRODUCT_SERVICE_URL
+                    value: "http://product-service:8002"
+                  - name: ORDER_SERVICE_URL
+                    value: "http://order-service:8003"
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: api-gateway
+            namespace: $(namespace)
+          spec:
+            type: LoadBalancer
+            ports:
+            - port: 8000
+              targetPort: 8000
+            selector:
+              app: api-gateway
+        - task: Kubernetes@1
+          displayName: Deploy to AKS
+          inputs:
+            connectionType: 'Kubernetes Service Connection'
+            kubernetesServiceConnection: '$(kubernetesServiceConnection)'
+            namespace: '$(namespace)'
+            command: 'apply'
+            useConfigurationFile: true
+            configuration: |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: auth-service
+                namespace: $(namespace)
+              spec:
+                replicas: 2
+                selector:
+                  matchLabels:
                     app: auth-service
-                ---
-                apiVersion: apps/v1
-                kind: Deployment
-                metadata:
-                  name: product-service
-                  namespace: $(namespace)
-                spec:
-                  replicas: 2
-                  selector:
-                    matchLabels:
-                      app: product-service
-                  template:
-                    metadata:
-                      labels:
-                        app: product-service
-                    spec:
-                      # Added imagePullSecrets
-                      imagePullSecrets:
-                      - name: acr-secret
-                      containers:
-                      - name: product-service
-                        image: $(containerRegistry)/$(imageRepository)/product-service:$(tag)
-                        ports:
-                        # Changed port from 80 to 8002
-                        - containerPort: 8002
-                        # Added environment variables
-                        env:
-                        - name: SQLALCHEMY_DATABASE_URL
-                          valueFrom:
-                            secretKeyRef:
-                              name: product-secrets
-                              key: SQLALCHEMY_DATABASE_URL
-                        - name: REDIS_URL
-                          value: "redis://redis:6379/1"
-                ---
-                apiVersion: v1
-                kind: Service
-                metadata:
-                  name: product-service
-                  namespace: $(namespace)
-                spec:
-                  ports:
-                  # Changed port from 80 to 8002
-                  - port: 8002
-                    targetPort: 8002
-                  selector:
+                template:
+                  metadata:
+                    labels:
+                      app: auth-service
+                  spec:
+                    imagePullSecrets:
+                    - name: acr-secret
+                    containers:
+                    - name: auth-service
+                      image: $(containerRegistry)/$(imageRepository)/auth-service:$(tag)
+                      ports:
+                      - containerPort: 8001
+                      env:
+                      - name: SQLALCHEMY_DATABASE_URL
+                        valueFrom:
+                          secretKeyRef:
+                            name: auth-secrets
+                            key: SQLALCHEMY_DATABASE_URL
+                      - name: REDIS_URL
+                        value: "redis://redis:6379/0"
+              ---
+              apiVersion: v1
+              kind: Service
+              metadata:
+                name: auth-service
+                namespace: $(namespace)
+              spec:
+                ports:
+                - port: 8001
+                  targetPort: 8001
+                selector:
+                  app: auth-service
+        - task: Kubernetes@1
+          displayName: Deploy to AKS
+          inputs:
+            connectionType: 'Kubernetes Service Connection'
+            kubernetesServiceConnection: '$(kubernetesServiceConnection)'
+            namespace: '$(namespace)'
+            command: 'apply'
+            useConfigurationFile: true
+            configuration: |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: product-service
+                namespace: $(namespace)
+              spec:
+                replicas: 2
+                selector:
+                  matchLabels:
                     app: product-service
-                ---
-                apiVersion: apps/v1
-                kind: Deployment
-                metadata:
-                  name: order-service
-                  namespace: $(namespace)
-                spec:
-                  replicas: 2
-                  selector:
-                    matchLabels:
-                      app: order-service
-                  template:
-                    metadata:
-                      labels:
-                        app: order-service
-                    spec:
-                      # Added imagePullSecrets
-                      imagePullSecrets:
-                      - name: acr-secret
-                      containers:
-                      - name: order-service
-                        image: $(containerRegistry)/$(imageRepository)/order-service:$(tag)
-                        ports:
-                        # Changed port from 80 to 8003
-                        - containerPort: 8003
-                        # Added environment variables
-                        env:
-                        - name: SQLALCHEMY_DATABASE_URL
-                          valueFrom:
-                            secretKeyRef:
-                              name: order-secrets
-                              key: SQLALCHEMY_DATABASE_URL
-                        - name: PRODUCT_SERVICE_URL
-                          value: "http://product-service:8002"
-                        - name: REDIS_URL
-                          value: "redis://redis:6379/2"
-                ---
-                apiVersion: v1
-                kind: Service
-                metadata:
-                  name: order-service
-                  namespace: $(namespace)
-                spec:
-                  ports:
-                  # Changed port from 80 to 8003
-                  - port: 8003
-                    targetPort: 8003
-                  selector:
+                template:
+                  metadata:
+                    labels:
+                      app: product-service
+                  spec:
+                    imagePullSecrets:
+                    - name: acr-secret
+                    containers:
+                    - name: product-service
+                      image: $(containerRegistry)/$(imageRepository)/product-service:$(tag)
+                      ports:
+                      - containerPort: 8002
+                      env:
+                      - name: SQLALCHEMY_DATABASE_URL
+                        valueFrom:
+                          secretKeyRef:
+                            name: product-secrets
+                            key: SQLALCHEMY_DATABASE_URL
+                      - name: REDIS_URL
+                        value: "redis://redis:6379/1"
+              ---
+              apiVersion: v1
+              kind: Service
+              metadata:
+                name: product-service
+                namespace: $(namespace)
+              spec:
+                ports:
+                - port: 8002
+                  targetPort: 8002
+                selector:
+                  app: product-service
+        - task: Kubernetes@1
+          displayName: Deploy to AKS
+          inputs:
+            connectionType: 'Kubernetes Service Connection'
+            kubernetesServiceConnection: '$(kubernetesServiceConnection)'
+            namespace: '$(namespace)'
+            command: 'apply'
+            useConfigurationFile: true
+            configuration: |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: order-service
+                namespace: $(namespace)
+              spec:
+                replicas: 2
+                selector:
+                  matchLabels:
                     app: order-service
-                EOF 
+                template:
+                  metadata:
+                    labels:
+                      app: order-service
+                  spec:
+                    imagePullSecrets:
+                    - name: acr-secret
+                    containers:
+                    - name: order-service
+                      image: $(containerRegistry)/$(imageRepository)/order-service:$(tag)
+                      ports:
+                      - containerPort: 8003
+                      env:
+                      - name: SQLALCHEMY_DATABASE_URL
+                        valueFrom:
+                          secretKeyRef:
+                            name: order-secrets
+                            key: SQLALCHEMY_DATABASE_URL
+                      - name: PRODUCT_SERVICE_URL
+                        value: "http://product-service:8002"
+                      - name: REDIS_URL
+                        value: "redis://redis:6379/2"
+              ---
+              apiVersion: v1
+              kind: Service
+              metadata:
+                name: order-service
+                namespace: $(namespace)
+              spec:
+                ports:
+                - port: 8003
+                  targetPort: 8003
+                selector:
+                  app: order-service 
