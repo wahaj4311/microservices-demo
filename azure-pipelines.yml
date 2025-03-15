@@ -31,6 +31,9 @@ stages:
     pool:
       vmImage: 'ubuntu-latest'
     steps:
+    - checkout: self
+      fetchDepth: 1
+      
     - task: Bash@3
       displayName: Configure logging
       inputs:
@@ -89,6 +92,9 @@ stages:
       runOnce:
         deploy:
           steps:
+          - checkout: self
+            fetchDepth: 1
+            
           - task: Bash@3
             displayName: Debug and Logging
             inputs:
@@ -113,6 +119,17 @@ stages:
                 kubectl get namespace $(namespace)
 
           # Update image tags in k8s manifests
+          - task: Bash@3
+            displayName: Debug Charts Directory
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "Current directory: $(pwd)"
+                echo "Listing workspace directory:"
+                ls -la
+                echo "Listing charts directory:"
+                ls -R charts/
+                
           - task: Bash@3
             displayName: Update K8s Manifests
             inputs:
