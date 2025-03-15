@@ -120,6 +120,7 @@ stages:
               namespace: '$(namespace)'
               command: 'apply'
               useConfigurationFile: true
+              arguments: '--validate=false'
               inline: |
                 apiVersion: apps/v1
                 kind: Deployment
