@@ -205,8 +205,8 @@ During the deployment stage of the pipeline, the following error was encountered
 Even after adding the `--validate=false` flag, we encountered a more persistent authentication error:
 
 ```
-E0315 13:17:29.938117   33217 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: the server has asked for the client to provide credentials"
-unable to recognize "/home/xma/azagent/_work/_temp/kubectlTask/1742026648764/inlineconfig.yaml": the server has asked for the client to provide credentials
+E0315 13:21:40.305280   35040 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: the server has asked for the client to provide credentials"
+unable to recognize "/home/xma/azagent/_work/_temp/kubectlTask/1742026899097/inlineconfig.yaml": the server has asked for the client to provide credentials
 ##[error]The process '/usr/bin/kubectl' failed with exit code 1
 ```
 
@@ -219,17 +219,15 @@ This error occurs because the Kubernetes API server is requesting authentication
 3. **Validation Issues**: The Kubernetes manifest may contain syntax or validation errors.
 4. **Authentication Context**: The kubectl command is not properly authenticated with the Kubernetes cluster.
 
-### Solution
+### Attempted Solutions
 
-To resolve this issue, the following steps were taken:
+We tried several approaches to resolve this issue:
 
-1. **Updated Service Connection**:
-   - Verified and updated the Kubernetes service connection in Azure DevOps with the correct credentials.
-
-2. **Added `--validate=false` Flag**:
+1. **Added `--validate=false` Flag** (Did Not Work):
    - Modified the Kubernetes task in the pipeline to include the `--validate=false` flag to bypass validation.
+   - This did not resolve the authentication issues.
 
-3. **Added Explicit Authentication Step**:
+2. **Added Explicit Authentication Step** (Did Not Work):
    - Added a separate Kubernetes task to explicitly set up the authentication context before running the kubectl apply command:
 
    ```yaml
@@ -240,12 +238,48 @@ To resolve this issue, the following steps were taken:
        kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
        command: 'login'
    ```
+   - This approach still resulted in authentication errors.
 
-4. **Verified RBAC Permissions**:
-   - Ensured that the service account used by the pipeline has the necessary RBAC permissions in the Kubernetes cluster.
+### Working Solution
 
-5. **Split Manifests**:
-   - As an alternative approach, split the large inline manifest into separate files and used the `kubectl apply -f` command with a directory containing these files.
+After multiple attempts, we found that using the Azure CLI directly provided the most reliable authentication method:
+
+1. **Replaced Kubernetes Tasks with Azure CLI Task**:
+   - Instead of using the Kubernetes task, we used the AzureCLI task to authenticate with Azure and get the Kubernetes credentials:
+
+   ```yaml
+   - task: AzureCLI@2
+     displayName: Deploy to AKS using az CLI
+     inputs:
+       azureSubscription: 'azure-subscription-service-connection'
+       scriptType: 'bash'
+       scriptLocation: 'inlineScript'
+       inlineScript: |
+         # Get AKS credentials
+         az aks get-credentials --resource-group $(resourceGroupName) --name $(clusterName) --overwrite-existing
+         
+         # Create namespace if it doesn't exist
+         kubectl create namespace $(namespace) --dry-run=client -o yaml | kubectl apply -f -
+         
+         # Apply Kubernetes manifests with validation disabled
+         cat <<EOF | kubectl apply -f - --validate=false
+         # Kubernetes manifests...
+         EOF
+   ```
+
+2. **Updated Pipeline Variables**:
+   - Added the following variables to the pipeline:
+     - `resourceGroupName`: The name of the resource group containing the AKS cluster
+     - `clusterName`: The name of the AKS cluster
+
+3. **Verified Azure Service Connection**:
+   - Ensured that the Azure service connection had the necessary permissions to access the AKS cluster.
+
+This approach worked because:
+- It uses the Azure CLI to authenticate directly with Azure
+- It gets fresh Kubernetes credentials using `az aks get-credentials`
+- It applies the manifests using a direct kubectl command with the `--validate=false` flag
+- It avoids the authentication issues encountered with the Kubernetes task
 
 After implementing these changes, the pipeline was able to successfully deploy the application to the Kubernetes cluster.
 

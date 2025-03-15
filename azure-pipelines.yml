@@ -17,6 +17,10 @@ variables:
   # Kubernetes service connection
   kubernetesServiceConnection: 'aks-service-connection'
   namespace: 'microservices-demo'
+  
+  # AKS cluster information
+  resourceGroupName: 'microservices-demo-rg'
+  clusterName: 'microservices-demo-aks'
 
 stages:
 - stage: Build
@@ -112,24 +116,22 @@ stages:
       runOnce:
         deploy:
           steps:
-          # Add task to explicitly set up kubeconfig
-          - task: Kubernetes@1
-            displayName: Set Kubernetes Context
+          # Replace Kubernetes tasks with script that uses az CLI for authentication
+          - task: AzureCLI@2
+            displayName: Deploy to AKS using az CLI
             inputs:
-              connectionType: 'Kubernetes Service Connection'
-              kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
-              command: 'login'
-          
-          - task: Kubernetes@1
-            displayName: Deploy to Kubernetes cluster
-            inputs:
-              connectionType: 'Kubernetes Service Connection'
-              kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
-              namespace: '$(namespace)'
-              command: 'apply'
-              useConfigurationFile: true
-              arguments: '--validate=false'
-              inline: |
+              azureSubscription: 'azure-subscription-service-connection'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Get AKS credentials
+                az aks get-credentials --resource-group $(resourceGroupName) --name $(clusterName) --overwrite-existing
+                
+                # Create namespace if it doesn't exist
+                kubectl create namespace $(namespace) --dry-run=client -o yaml | kubectl apply -f -
+                
+                # Apply Kubernetes manifests with validation disabled
+                cat <<EOF | kubectl apply -f - --validate=false
                 apiVersion: apps/v1
                 kind: Deployment
                 metadata:
@@ -318,4 +320,5 @@ stages:
                   - port: 8003
                     targetPort: 8003
                   selector:
-                    app: order-service 
+                    app: order-service
+                EOF 
