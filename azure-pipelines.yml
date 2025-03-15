@@ -107,214 +107,254 @@ stages:
   displayName: Deploy to AKS
   dependsOn: Build
   jobs:
-  - job: DeployToAKS
+  - deployment: DeployToAKS
     displayName: Deploy to AKS
     pool:
-      vmImage: 'ubuntu-latest'
-    steps:
-    - task: Kubernetes@1
-      displayName: Deploy to AKS
-      inputs:
-        connectionType: 'Kubernetes Service Connection'
-        kubernetesServiceConnection: '$(kubernetesServiceConnection)'
-        namespace: '$(namespace)'
-        command: 'apply'
-        useConfigurationFile: true
-        configuration: |
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: api-gateway
-            namespace: $(namespace)
-          spec:
-            replicas: 2
-            selector:
-              matchLabels:
-                app: api-gateway
-            template:
-              metadata:
-                labels:
-                  app: api-gateway
-              spec:
-                imagePullSecrets:
-                - name: acr-secret
-                containers:
-                - name: api-gateway
-                  image: $(containerRegistry)/$(imageRepository)/api-gateway:$(tag)
+      vmImage: 'ubuntu-latest'  # Using Azure-hosted agent instead of self-hosted
+    environment: 'development'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          # Replace Azure CLI task with Kubernetes tasks
+          - task: Kubernetes@1
+            displayName: Create namespace
+            inputs:
+              connectionType: 'Kubernetes Service Connection'
+              kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
+              command: 'apply'
+              arguments: '-f - --validate=false'
+              secretType: 'dockerRegistry'
+              containerRegistryType: 'Azure Container Registry'
+              inputType: 'inline'
+              inline: |
+                apiVersion: v1
+                kind: Namespace
+                metadata:
+                  name: $(namespace)
+          
+          # Deploy API Gateway
+          - task: Kubernetes@1
+            displayName: Deploy API Gateway
+            inputs:
+              connectionType: 'Kubernetes Service Connection'
+              kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
+              namespace: '$(namespace)'
+              command: 'apply'
+              arguments: '-f - --validate=false'
+              secretType: 'dockerRegistry'
+              containerRegistryType: 'Azure Container Registry'
+              inputType: 'inline'
+              inline: |
+                apiVersion: apps/v1
+                kind: Deployment
+                metadata:
+                  name: api-gateway
+                  namespace: $(namespace)
+                spec:
+                  replicas: 2
+                  selector:
+                    matchLabels:
+                      app: api-gateway
+                  template:
+                    metadata:
+                      labels:
+                        app: api-gateway
+                    spec:
+                      imagePullSecrets:
+                      - name: acr-secret
+                      containers:
+                      - name: api-gateway
+                        image: $(containerRegistry)/$(imageRepository)/api-gateway:$(tag)
+                        ports:
+                        - containerPort: 8000
+                        env:
+                        - name: AUTH_SERVICE_URL
+                          value: "http://auth-service:8001"
+                        - name: PRODUCT_SERVICE_URL
+                          value: "http://product-service:8002"
+                        - name: ORDER_SERVICE_URL
+                          value: "http://order-service:8003"
+                ---
+                apiVersion: v1
+                kind: Service
+                metadata:
+                  name: api-gateway
+                  namespace: $(namespace)
+                spec:
+                  type: LoadBalancer
                   ports:
-                  - containerPort: 8000
-                  env:
-                  - name: AUTH_SERVICE_URL
-                    value: "http://auth-service:8001"
-                  - name: PRODUCT_SERVICE_URL
-                    value: "http://product-service:8002"
-                  - name: ORDER_SERVICE_URL
-                    value: "http://order-service:8003"
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: api-gateway
-            namespace: $(namespace)
-          spec:
-            type: LoadBalancer
-            ports:
-            - port: 8000
-              targetPort: 8000
-            selector:
-              app: api-gateway
-        - task: Kubernetes@1
-          displayName: Deploy to AKS
-          inputs:
-            connectionType: 'Kubernetes Service Connection'
-            kubernetesServiceConnection: '$(kubernetesServiceConnection)'
-            namespace: '$(namespace)'
-            command: 'apply'
-            useConfigurationFile: true
-            configuration: |
-              apiVersion: apps/v1
-              kind: Deployment
-              metadata:
-                name: auth-service
-                namespace: $(namespace)
-              spec:
-                replicas: 2
-                selector:
-                  matchLabels:
-                    app: auth-service
-                template:
-                  metadata:
-                    labels:
+                  - port: 8000
+                    targetPort: 8000
+                  selector:
+                    app: api-gateway
+          
+          # Deploy Auth Service
+          - task: Kubernetes@1
+            displayName: Deploy Auth Service
+            inputs:
+              connectionType: 'Kubernetes Service Connection'
+              kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
+              namespace: '$(namespace)'
+              command: 'apply'
+              arguments: '-f - --validate=false'
+              secretType: 'dockerRegistry'
+              containerRegistryType: 'Azure Container Registry'
+              inputType: 'inline'
+              inline: |
+                apiVersion: apps/v1
+                kind: Deployment
+                metadata:
+                  name: auth-service
+                  namespace: $(namespace)
+                spec:
+                  replicas: 2
+                  selector:
+                    matchLabels:
                       app: auth-service
-                  spec:
-                    imagePullSecrets:
-                    - name: acr-secret
-                    containers:
-                    - name: auth-service
-                      image: $(containerRegistry)/$(imageRepository)/auth-service:$(tag)
-                      ports:
-                      - containerPort: 8001
-                      env:
-                      - name: SQLALCHEMY_DATABASE_URL
-                        valueFrom:
-                          secretKeyRef:
-                            name: auth-secrets
-                            key: SQLALCHEMY_DATABASE_URL
-                      - name: REDIS_URL
-                        value: "redis://redis:6379/0"
-              ---
-              apiVersion: v1
-              kind: Service
-              metadata:
-                name: auth-service
-                namespace: $(namespace)
-              spec:
-                ports:
-                - port: 8001
-                  targetPort: 8001
-                selector:
-                  app: auth-service
-        - task: Kubernetes@1
-          displayName: Deploy to AKS
-          inputs:
-            connectionType: 'Kubernetes Service Connection'
-            kubernetesServiceConnection: '$(kubernetesServiceConnection)'
-            namespace: '$(namespace)'
-            command: 'apply'
-            useConfigurationFile: true
-            configuration: |
-              apiVersion: apps/v1
-              kind: Deployment
-              metadata:
-                name: product-service
-                namespace: $(namespace)
-              spec:
-                replicas: 2
-                selector:
-                  matchLabels:
-                    app: product-service
-                template:
-                  metadata:
-                    labels:
+                  template:
+                    metadata:
+                      labels:
+                        app: auth-service
+                    spec:
+                      imagePullSecrets:
+                      - name: acr-secret
+                      containers:
+                      - name: auth-service
+                        image: $(containerRegistry)/$(imageRepository)/auth-service:$(tag)
+                        ports:
+                        - containerPort: 8001
+                        env:
+                        - name: SQLALCHEMY_DATABASE_URL
+                          valueFrom:
+                            secretKeyRef:
+                              name: auth-secrets
+                              key: SQLALCHEMY_DATABASE_URL
+                        - name: REDIS_URL
+                          value: "redis://redis:6379/0"
+                ---
+                apiVersion: v1
+                kind: Service
+                metadata:
+                  name: auth-service
+                  namespace: $(namespace)
+                spec:
+                  ports:
+                  - port: 8001
+                    targetPort: 8001
+                  selector:
+                    app: auth-service
+          
+          # Deploy Product Service
+          - task: Kubernetes@1
+            displayName: Deploy Product Service
+            inputs:
+              connectionType: 'Kubernetes Service Connection'
+              kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
+              namespace: '$(namespace)'
+              command: 'apply'
+              arguments: '-f - --validate=false'
+              secretType: 'dockerRegistry'
+              containerRegistryType: 'Azure Container Registry'
+              inputType: 'inline'
+              inline: |
+                apiVersion: apps/v1
+                kind: Deployment
+                metadata:
+                  name: product-service
+                  namespace: $(namespace)
+                spec:
+                  replicas: 2
+                  selector:
+                    matchLabels:
                       app: product-service
-                  spec:
-                    imagePullSecrets:
-                    - name: acr-secret
-                    containers:
-                    - name: product-service
-                      image: $(containerRegistry)/$(imageRepository)/product-service:$(tag)
-                      ports:
-                      - containerPort: 8002
-                      env:
-                      - name: SQLALCHEMY_DATABASE_URL
-                        valueFrom:
-                          secretKeyRef:
-                            name: product-secrets
-                            key: SQLALCHEMY_DATABASE_URL
-                      - name: REDIS_URL
-                        value: "redis://redis:6379/1"
-              ---
-              apiVersion: v1
-              kind: Service
-              metadata:
-                name: product-service
-                namespace: $(namespace)
-              spec:
-                ports:
-                - port: 8002
-                  targetPort: 8002
-                selector:
-                  app: product-service
-        - task: Kubernetes@1
-          displayName: Deploy to AKS
-          inputs:
-            connectionType: 'Kubernetes Service Connection'
-            kubernetesServiceConnection: '$(kubernetesServiceConnection)'
-            namespace: '$(namespace)'
-            command: 'apply'
-            useConfigurationFile: true
-            configuration: |
-              apiVersion: apps/v1
-              kind: Deployment
-              metadata:
-                name: order-service
-                namespace: $(namespace)
-              spec:
-                replicas: 2
-                selector:
-                  matchLabels:
-                    app: order-service
-                template:
-                  metadata:
-                    labels:
+                  template:
+                    metadata:
+                      labels:
+                        app: product-service
+                    spec:
+                      imagePullSecrets:
+                      - name: acr-secret
+                      containers:
+                      - name: product-service
+                        image: $(containerRegistry)/$(imageRepository)/product-service:$(tag)
+                        ports:
+                        - containerPort: 8002
+                        env:
+                        - name: SQLALCHEMY_DATABASE_URL
+                          valueFrom:
+                            secretKeyRef:
+                              name: product-secrets
+                              key: SQLALCHEMY_DATABASE_URL
+                        - name: REDIS_URL
+                          value: "redis://redis:6379/1"
+                ---
+                apiVersion: v1
+                kind: Service
+                metadata:
+                  name: product-service
+                  namespace: $(namespace)
+                spec:
+                  ports:
+                  - port: 8002
+                    targetPort: 8002
+                  selector:
+                    app: product-service
+          
+          # Deploy Order Service
+          - task: Kubernetes@1
+            displayName: Deploy Order Service
+            inputs:
+              connectionType: 'Kubernetes Service Connection'
+              kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
+              namespace: '$(namespace)'
+              command: 'apply'
+              arguments: '-f - --validate=false'
+              secretType: 'dockerRegistry'
+              containerRegistryType: 'Azure Container Registry'
+              inputType: 'inline'
+              inline: |
+                apiVersion: apps/v1
+                kind: Deployment
+                metadata:
+                  name: order-service
+                  namespace: $(namespace)
+                spec:
+                  replicas: 2
+                  selector:
+                    matchLabels:
                       app: order-service
-                  spec:
-                    imagePullSecrets:
-                    - name: acr-secret
-                    containers:
-                    - name: order-service
-                      image: $(containerRegistry)/$(imageRepository)/order-service:$(tag)
-                      ports:
-                      - containerPort: 8003
-                      env:
-                      - name: SQLALCHEMY_DATABASE_URL
-                        valueFrom:
-                          secretKeyRef:
-                            name: order-secrets
-                            key: SQLALCHEMY_DATABASE_URL
-                      - name: PRODUCT_SERVICE_URL
-                        value: "http://product-service:8002"
-                      - name: REDIS_URL
-                        value: "redis://redis:6379/2"
-              ---
-              apiVersion: v1
-              kind: Service
-              metadata:
-                name: order-service
-                namespace: $(namespace)
-              spec:
-                ports:
-                - port: 8003
-                  targetPort: 8003
-                selector:
-                  app: order-service 
+                  template:
+                    metadata:
+                      labels:
+                        app: order-service
+                    spec:
+                      imagePullSecrets:
+                      - name: acr-secret
+                      containers:
+                      - name: order-service
+                        image: $(containerRegistry)/$(imageRepository)/order-service:$(tag)
+                        ports:
+                        - containerPort: 8003
+                        env:
+                        - name: SQLALCHEMY_DATABASE_URL
+                          valueFrom:
+                            secretKeyRef:
+                              name: order-secrets
+                              key: SQLALCHEMY_DATABASE_URL
+                        - name: PRODUCT_SERVICE_URL
+                          value: "http://product-service:8002"
+                        - name: REDIS_URL
+                          value: "redis://redis:6379/2"
+                ---
+                apiVersion: v1
+                kind: Service
+                metadata:
+                  name: order-service
+                  namespace: $(namespace)
+                spec:
+                  ports:
+                  - port: 8003
+                    targetPort: 8003
+                  selector:
+                    app: order-service 
