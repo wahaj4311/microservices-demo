@@ -14,31 +14,31 @@ spec:
         app: product-service
     spec:
       imagePullSecrets:
-      - name: acr-secret
+        - name: acr-secret
       containers:
-      - name: product-service
-        image: {{ .Values.productService.image }}
-        ports:
-        - containerPort: 8002
-        resources:
-          {{- toYaml .Values.productService.resources | nindent 10 }}
-        env:
-        - name: SQLALCHEMY_DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: product-secrets
-              key: SQLALCHEMY_DATABASE_URL
-        - name: REDIS_URL
-          value: {{ .Values.productService.env.REDIS_URL | quote }}
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8002
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 8002
-          initialDelaySeconds: 5
-          periodSeconds: 10 
+        - name: product-service
+          image: {{ .Values.productService.image }}
+          ports:
+            - containerPort: 8002
+          resources:
+            {{- toYaml .Values.productService.resources | nindent 12 }}
+          env:
+            - name: SQLALCHEMY_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: product-secrets
+                  key: SQLALCHEMY_DATABASE_URL
+            - name: REDIS_URL
+              value: {{ .Values.productService.env.REDIS_URL | quote }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8002
+            initialDelaySeconds: 5
+            periodSeconds: 10 

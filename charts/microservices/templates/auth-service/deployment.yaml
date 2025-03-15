@@ -14,31 +14,31 @@ spec:
         app: auth-service
     spec:
       imagePullSecrets:
-      - name: acr-secret
+        - name: acr-secret
       containers:
-      - name: auth-service
-        image: {{ .Values.authService.image }}
-        ports:
-        - containerPort: 8001
-        resources:
-          {{- toYaml .Values.authService.resources | nindent 10 }}
-        env:
-        - name: SQLALCHEMY_DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: auth-secrets
-              key: SQLALCHEMY_DATABASE_URL
-        - name: REDIS_URL
-          value: {{ .Values.authService.env.REDIS_URL | quote }}
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8001
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 8001
-          initialDelaySeconds: 5
-          periodSeconds: 10 
+        - name: auth-service
+          image: {{ .Values.authService.image }}
+          ports:
+            - containerPort: 8001
+          resources:
+            {{- toYaml .Values.authService.resources | nindent 12 }}
+          env:
+            - name: SQLALCHEMY_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: SQLALCHEMY_DATABASE_URL
+            - name: REDIS_URL
+              value: {{ .Values.authService.env.REDIS_URL | quote }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 10 
