@@ -151,6 +151,14 @@ stages:
                 helm version
                 echo "Helm list:"
                 helm list -n $(namespace)
+                echo "Checking for stuck releases..."
+                if helm list -n $(namespace) | grep -q "pending-"; then
+                  echo "Found stuck releases, cleaning up..."
+                  for release in $(helm list -n $(namespace) -q); do
+                    helm status $release -n $(namespace)
+                    helm uninstall $release -n $(namespace) || true
+                  done
+                fi
                 echo "Validating chart:"
                 helm lint ./charts/microservices
                 echo "Template validation:"
@@ -170,12 +178,15 @@ stages:
               chartPath: './charts/microservices'
               releaseName: 'microservices-demo'
               install: true
+              force: true
               waitForExecution: true
               arguments: >
                 --create-namespace 
                 --timeout 10m0s 
                 --debug 
                 --dry-run 
+                --atomic 
+                --cleanup-on-fail 
                 --set containerRegistry=$(containerRegistry) 
                 --set imageRepository=$(imageRepository) 
                 --set tag=$(tag)
@@ -195,10 +206,13 @@ stages:
               chartPath: './charts/microservices'
               releaseName: 'microservices-demo'
               install: true
+              force: true
               waitForExecution: true
               arguments: >
                 --create-namespace 
                 --timeout 10m0s 
+                --atomic 
+                --cleanup-on-fail 
                 --set containerRegistry=$(containerRegistry) 
                 --set imageRepository=$(imageRepository) 
                 --set tag=$(tag)
