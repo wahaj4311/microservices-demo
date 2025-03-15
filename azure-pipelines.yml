@@ -149,19 +149,19 @@ stages:
                         app: api-gateway
                     spec:
                       imagePullSecrets:
-                      - name: acr-secret
+                        - name: acr-secret
                       containers:
-                      - name: api-gateway
-                        image: $CONTAINER_REGISTRY/$IMAGE_REPOSITORY/api-gateway:$TAG
-                        ports:
-                        - containerPort: 8000
-                        env:
-                        - name: AUTH_SERVICE_URL
-                          value: "http://auth-service:8001"
-                        - name: PRODUCT_SERVICE_URL
-                          value: "http://product-service:8002"
-                        - name: ORDER_SERVICE_URL
-                          value: "http://order-service:8003"
+                        - name: api-gateway
+                          image: $CONTAINER_REGISTRY/$IMAGE_REPOSITORY/api-gateway:$TAG
+                          ports:
+                            - containerPort: 8000
+                          env:
+                            - name: AUTH_SERVICE_URL
+                              value: "http://auth-service:8001"
+                            - name: PRODUCT_SERVICE_URL
+                              value: "http://product-service:8002"
+                            - name: ORDER_SERVICE_URL
+                              value: "http://order-service:8003"
                 ---
                 apiVersion: v1
                 kind: Service
