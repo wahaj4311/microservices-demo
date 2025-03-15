@@ -120,7 +120,7 @@ stages:
           - task: AzureCLI@2
             displayName: Deploy to AKS using az CLI
             inputs:
-              azureSubscription: 'azure-subscription-service-connection'
+              azureSubscription: '$(kubernetesServiceConnection)'
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               inlineScript: |

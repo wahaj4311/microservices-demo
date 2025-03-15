@@ -251,7 +251,7 @@ After multiple attempts, we found that using the Azure CLI directly provided the
    - task: AzureCLI@2
      displayName: Deploy to AKS using az CLI
      inputs:
-       azureSubscription: 'azure-subscription-service-connection'
+       azureSubscription: '$(kubernetesServiceConnection)'
        scriptType: 'bash'
        scriptLocation: 'inlineScript'
        inlineScript: |
@@ -267,19 +267,31 @@ After multiple attempts, we found that using the Azure CLI directly provided the
          EOF
    ```
 
+   **Note**: Initially, we tried using a separate Azure service connection (`azure-subscription-service-connection`), but encountered an authorization error:
+   
+   ```
+   "The pipeline is not valid. Job DeployToAKS: Step input azureSubscription references service connection azure-subscription-service-connection which could not be found. The service connection does not exist, has been disabled or has not been authorized for use."
+   ```
+   
+   We resolved this by reusing the existing Kubernetes service connection (`$(kubernetesServiceConnection)`) which already had the necessary permissions.
+
 2. **Updated Pipeline Variables**:
    - Added the following variables to the pipeline:
      - `resourceGroupName`: The name of the resource group containing the AKS cluster
      - `clusterName`: The name of the AKS cluster
 
-3. **Verified Azure Service Connection**:
-   - Ensured that the Azure service connection had the necessary permissions to access the AKS cluster.
+3. **Verified Service Connection Permissions**:
+   - Ensured that the Kubernetes service connection had the necessary permissions to:
+     - Access the AKS cluster
+     - Execute Azure CLI commands
+     - Create and modify Kubernetes resources
 
 This approach worked because:
 - It uses the Azure CLI to authenticate directly with Azure
 - It gets fresh Kubernetes credentials using `az aks get-credentials`
 - It applies the manifests using a direct kubectl command with the `--validate=false` flag
 - It avoids the authentication issues encountered with the Kubernetes task
+- It reuses an existing service connection that already has the necessary permissions
 
 After implementing these changes, the pipeline was able to successfully deploy the application to the Kubernetes cluster.
 
