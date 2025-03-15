@@ -26,24 +26,7 @@ spec:
           limits:
             cpu: "500m"
             memory: "256Mi"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8001
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 8001
-          initialDelaySeconds: 5
-          periodSeconds: 10
         env:
-        - name: JWT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: auth-secrets
-              key: jwt-secret
         - name: SQLALCHEMY_DATABASE_URL
           valueFrom:
             secretKeyRef:

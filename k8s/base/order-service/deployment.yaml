@@ -26,18 +26,6 @@ spec:
           limits:
             cpu: "500m"
             memory: "256Mi"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8003
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 8003
-          initialDelaySeconds: 5
-          periodSeconds: 10
         env:
         - name: SQLALCHEMY_DATABASE_URL
           valueFrom:
