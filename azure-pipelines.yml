@@ -148,16 +148,13 @@ stages:
                       labels:
                         app: api-gateway
                     spec:
-                      # Added imagePullSecrets
                       imagePullSecrets:
                       - name: acr-secret
                       containers:
                       - name: api-gateway
                         image: $CONTAINER_REGISTRY/$IMAGE_REPOSITORY/api-gateway:$TAG
                         ports:
-                        # Changed port from 80 to 8000
                         - containerPort: 8000
-                        # Added environment variables
                         env:
                         - name: AUTH_SERVICE_URL
                           value: "http://auth-service:8001"
@@ -174,7 +171,6 @@ stages:
                 spec:
                   type: LoadBalancer
                   ports:
-                  # Changed port from 80 to 8000
                   - port: 8000
                     targetPort: 8000
                   selector:
@@ -195,16 +191,13 @@ stages:
                       labels:
                         app: auth-service
                     spec:
-                      # Added imagePullSecrets
                       imagePullSecrets:
                       - name: acr-secret
                       containers:
                       - name: auth-service
                         image: $CONTAINER_REGISTRY/$IMAGE_REPOSITORY/auth-service:$TAG
                         ports:
-                        # Changed port from 80 to 8001
                         - containerPort: 8001
-                        # Added environment variables
                         env:
                         - name: SQLALCHEMY_DATABASE_URL
                           valueFrom:
@@ -221,7 +214,6 @@ stages:
                   namespace: $NAMESPACE
                 spec:
                   ports:
-                  # Changed port from 80 to 8001
                   - port: 8001
                     targetPort: 8001
                   selector:
@@ -242,16 +234,13 @@ stages:
                       labels:
                         app: product-service
                     spec:
-                      # Added imagePullSecrets
                       imagePullSecrets:
                       - name: acr-secret
                       containers:
                       - name: product-service
                         image: $CONTAINER_REGISTRY/$IMAGE_REPOSITORY/product-service:$TAG
                         ports:
-                        # Changed port from 80 to 8002
                         - containerPort: 8002
-                        # Added environment variables
                         env:
                         - name: SQLALCHEMY_DATABASE_URL
                           valueFrom:
@@ -268,7 +257,6 @@ stages:
                   namespace: $NAMESPACE
                 spec:
                   ports:
-                  # Changed port from 80 to 8002
                   - port: 8002
                     targetPort: 8002
                   selector:
@@ -289,16 +277,13 @@ stages:
                       labels:
                         app: order-service
                     spec:
-                      # Added imagePullSecrets
                       imagePullSecrets:
                       - name: acr-secret
                       containers:
                       - name: order-service
                         image: $CONTAINER_REGISTRY/$IMAGE_REPOSITORY/order-service:$TAG
                         ports:
-                        # Changed port from 80 to 8003
                         - containerPort: 8003
-                        # Added environment variables
                         env:
                         - name: SQLALCHEMY_DATABASE_URL
                           valueFrom:
@@ -317,7 +302,6 @@ stages:
                   namespace: $NAMESPACE
                 spec:
                   ports:
-                  # Changed port from 80 to 8003
                   - port: 8003
                     targetPort: 8003
                   selector:
