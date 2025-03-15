@@ -19,8 +19,8 @@ variables:
   namespace: 'microservices-demo'
   
   # AKS cluster information
-  resourceGroupName: 'microservices-demo-rg'
-  clusterName: 'microservices-demo-aks'
+  resourceGroupName: 'microservices-demo-dev-rg'
+  clusterName: 'microservices-demo-dev-aks'
 
 stages:
 - stage: Build
