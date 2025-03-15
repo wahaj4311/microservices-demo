@@ -116,29 +116,46 @@ stages:
       runOnce:
         deploy:
           steps:
-          # Replace Azure CLI task with Kubernetes tasks
-          - task: Kubernetes@1
-            displayName: Create namespace
+          # Add debug task to check connection
+          - task: Bash@3
+            displayName: Debug Kubernetes Connection
             inputs:
-              connectionType: 'Kubernetes Service Connection'
-              kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
-              command: 'apply'
-              arguments: '-f - --validate=false'
-              secretType: 'dockerRegistry'
-              containerRegistryType: 'Azure Container Registry'
-              inputType: 'inline'
-              inline: |
-                apiVersion: v1
-                kind: Namespace
-                metadata:
-                  name: $(namespace)
+              targetType: 'inline'
+              script: |
+                echo "Checking Azure CLI version"
+                az --version
+                echo "Checking kubectl version"
+                kubectl version --client
+                echo "Checking current context"
+                kubectl config current-context || echo "No current context"
+                echo "Listing available contexts"
+                kubectl config get-contexts || echo "No contexts available"
+          
+          # Add Azure CLI task to get credentials properly
+          - task: AzureCLI@2
+            displayName: Get AKS Credentials
+            inputs:
+              azureSubscription: 'azure-subscription-service-connection'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Get AKS credentials with admin access
+                az aks get-credentials --resource-group $(resourceGroupName) --name $(clusterName) --admin --overwrite-existing
+                
+                # Verify connection
+                kubectl get nodes
+                
+                # Create namespace if it doesn't exist
+                kubectl create namespace $(namespace) --dry-run=client -o yaml | kubectl apply -f -
           
           # Deploy API Gateway
           - task: Kubernetes@1
             displayName: Deploy API Gateway
             inputs:
-              connectionType: 'Kubernetes Service Connection'
-              kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
+              connectionType: 'Azure Resource Manager'
+              azureSubscriptionEndpoint: 'azure-subscription-service-connection'
+              azureResourceGroup: '$(resourceGroupName)'
+              kubernetesCluster: '$(clusterName)'
               namespace: '$(namespace)'
               command: 'apply'
               arguments: '-f - --validate=false'
@@ -193,8 +210,10 @@ stages:
           - task: Kubernetes@1
             displayName: Deploy Auth Service
             inputs:
-              connectionType: 'Kubernetes Service Connection'
-              kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
+              connectionType: 'Azure Resource Manager'
+              azureSubscriptionEndpoint: 'azure-subscription-service-connection'
+              azureResourceGroup: '$(resourceGroupName)'
+              kubernetesCluster: '$(clusterName)'
               namespace: '$(namespace)'
               command: 'apply'
               arguments: '-f - --validate=false'
@@ -249,8 +268,10 @@ stages:
           - task: Kubernetes@1
             displayName: Deploy Product Service
             inputs:
-              connectionType: 'Kubernetes Service Connection'
-              kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
+              connectionType: 'Azure Resource Manager'
+              azureSubscriptionEndpoint: 'azure-subscription-service-connection'
+              azureResourceGroup: '$(resourceGroupName)'
+              kubernetesCluster: '$(clusterName)'
               namespace: '$(namespace)'
               command: 'apply'
               arguments: '-f - --validate=false'
@@ -305,8 +326,10 @@ stages:
           - task: Kubernetes@1
             displayName: Deploy Order Service
             inputs:
-              connectionType: 'Kubernetes Service Connection'
-              kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
+              connectionType: 'Azure Resource Manager'
+              azureSubscriptionEndpoint: 'azure-subscription-service-connection'
+              azureResourceGroup: '$(resourceGroupName)'
+              kubernetesCluster: '$(clusterName)'
               namespace: '$(namespace)'
               command: 'apply'
               arguments: '-f - --validate=false'
