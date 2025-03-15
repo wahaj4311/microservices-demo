@@ -272,10 +272,10 @@ After multiple attempts, we found a solution that works with the existing Kubern
          EOF
          
          # Replace variables in the manifest file
-         sed -i "s|\$(namespace)|${namespace}|g" $TEMP_FILE
-         sed -i "s|\$(containerRegistry)|${containerRegistry}|g" $TEMP_FILE
-         sed -i "s|\$(imageRepository)|${imageRepository}|g" $TEMP_FILE
-         sed -i "s|\$(tag)|${tag}|g" $TEMP_FILE
+         sed -i "s|\\$(namespace)|${namespace}|g" $TEMP_FILE
+         sed -i "s|\\$(containerRegistry)|${containerRegistry}|g" $TEMP_FILE
+         sed -i "s|\\$(imageRepository)|${imageRepository}|g" $TEMP_FILE
+         sed -i "s|\\$(tag)|${tag}|g" $TEMP_FILE
          
          # Apply the manifests with validation disabled
          kubectl apply -f $TEMP_FILE --validate=false
@@ -321,6 +321,7 @@ This approach worked because:
 - It explicitly sets the KUBECONFIG environment variable to ensure kubectl uses the correct configuration
 - It applies the manifests using kubectl directly with `--validate=false` to bypass validation
 - It uses a temporary file to store the manifests, which avoids issues with inline manifests
+- It properly escapes special characters in the sed commands to prevent "Invalid back reference" errors
 
 After implementing these changes, the pipeline was able to successfully deploy the application to the Kubernetes cluster.
 
