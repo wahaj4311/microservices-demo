@@ -120,9 +120,8 @@ stages:
               kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
               namespace: '$(namespace)'
               command: 'apply'
-              arguments: '--validate=false'
-              useConfigMapFile: true
-              configMapFile: |
+              useConfigurationFile: true
+              inline: |
                 apiVersion: apps/v1
                 kind: Deployment
                 metadata:

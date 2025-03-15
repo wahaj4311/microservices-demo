@@ -244,8 +244,8 @@ We tried several approaches to resolve this issue:
 
 After multiple attempts, we found a solution that works with the existing Kubernetes service connection:
 
-1. **Used Kubernetes Task with ConfigMapFile**:
-   - Instead of using the AzureCLI task, we went back to using the Kubernetes task but with a different approach:
+1. **Used Kubernetes Task with Inline Configuration**:
+   - We went back to using the Kubernetes task with the correct parameters:
 
    ```yaml
    - task: Kubernetes@1
@@ -255,15 +255,14 @@ After multiple attempts, we found a solution that works with the existing Kubern
        kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
        namespace: '$(namespace)'
        command: 'apply'
-       arguments: '--validate=false'
-       useConfigMapFile: true
-       configMapFile: |
+       useConfigurationFile: true
+       inline: |
          # Kubernetes manifests...
    ```
 
    **Note**: We encountered several issues with our authentication approaches:
    
-   1. First, we tried using the Kubernetes task with inline manifests, but encountered authentication errors even with the `--validate=false` flag.
+   1. First, we tried using the Kubernetes task with `--validate=false` flag, but encountered authentication errors.
    
    2. Then, we tried using the AzureCLI task with the Kubernetes service connection, but encountered a service connection type mismatch error:
    
@@ -271,7 +270,13 @@ After multiple attempts, we found a solution that works with the existing Kubern
    "The pipeline is not valid. Job DeployToAKS: Step input azureSubscription expects a service connection of type AzureRM but the provided service connection aks-service-connection is of type kubernetes."
    ```
    
-   3. Finally, we went back to the Kubernetes task but used the `useConfigMapFile` parameter instead of `inline`, which resolved the authentication issues.
+   3. Next, we tried using `useConfigMapFile` parameter, but encountered an error:
+   
+   ```
+   error: must specify one of -f and -k
+   ```
+   
+   4. Finally, we used the correct parameter `useConfigurationFile` with `inline` to provide the Kubernetes manifests directly.
 
 2. **Removed Unnecessary Variables**:
    - Removed the AKS-specific variables that were no longer needed:
@@ -284,8 +289,8 @@ After multiple attempts, we found a solution that works with the existing Kubern
 
 This approach worked because:
 - It uses the Kubernetes service connection directly with the Kubernetes task
-- It applies the manifests using the `--validate=false` flag to bypass validation
-- It uses the `useConfigMapFile` parameter which seems to handle authentication better than the `inline` parameter
+- It uses the correct parameter (`useConfigurationFile`) to specify the configuration
+- It provides the manifests inline, which is properly passed to kubectl with the `-f` flag
 - It avoids the service connection type mismatch by using the correct task for the connection type
 
 After implementing these changes, the pipeline was able to successfully deploy the application to the Kubernetes cluster.
