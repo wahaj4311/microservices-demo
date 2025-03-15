@@ -19,23 +19,8 @@ ORDER_SERVICE_URL = os.getenv("ORDER_SERVICE_URL", "http://localhost:8003")
 
 @app.get("/health")
 async def health_check():
-    try:
-        # Check all service connections
-        async with httpx.AsyncClient() as client:
-            services = {
-                "auth": AUTH_SERVICE_URL,
-                "product": PRODUCT_SERVICE_URL,
-                "order": ORDER_SERVICE_URL
-            }
-            
-            for name, url in services.items():
-                response = await client.get(f"{url}/health")
-                if response.status_code != 200:
-                    raise HTTPException(status_code=503, detail=f"{name} service unhealthy")
-        
-        return {"status": "healthy"}
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=str(e))
+    # Liveness probe - just check if the application is running
+    return {"status": "healthy"}
 
 @app.get("/ready")
 async def readiness_check():
@@ -49,9 +34,9 @@ async def readiness_check():
             }
             
             for name, url in services.items():
-                response = await client.get(f"{url}/ready")
+                response = await client.get(f"{url}/health")
                 if response.status_code != 200:
-                    raise HTTPException(status_code=503, detail=f"{name} service not ready")
+                    raise HTTPException(status_code=503, detail=f"{name} service unhealthy")
         
         return {"status": "ready"}
     except Exception as e:

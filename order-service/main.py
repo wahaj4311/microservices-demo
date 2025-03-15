@@ -25,21 +25,8 @@ app = FastAPI(title="Order Service", description="Order Processing and Managemen
 
 @app.get("/health")
 async def health_check():
-    try:
-        # Check database connection
-        db = SessionLocal()
-        db.execute("SELECT 1")
-        db.close()
-        
-        # Check product service connection
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{PRODUCT_SERVICE_URL}/health")
-            if response.status_code != 200:
-                raise HTTPException(status_code=503, detail="Product service unhealthy")
-        
-        return {"status": "healthy"}
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=str(e))
+    # Liveness probe - just check if the application is running
+    return {"status": "healthy"}
 
 @app.get("/ready")
 async def readiness_check():
@@ -57,6 +44,7 @@ async def readiness_check():
         
         return {"status": "ready"}
     except Exception as e:
+        print(f"Readiness check failed: {str(e)}")
         raise HTTPException(status_code=503, detail=str(e))
 
 # Enums

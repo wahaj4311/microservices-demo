@@ -9,6 +9,14 @@ postgres:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: auth_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 200m
+        memory: 512Mi
   product:
     image: postgres:15
     persistence:
@@ -18,6 +26,14 @@ postgres:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: product_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 200m
+        memory: 512Mi
   order:
     image: postgres:15
     persistence:
@@ -27,12 +43,27 @@ postgres:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: order_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 200m
+        memory: 512Mi
 
 # Redis configuration
 redis:
   image: redis:7
   persistence:
     enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
 
 # API Gateway configuration
 apiGateway:

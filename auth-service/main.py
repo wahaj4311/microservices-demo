@@ -30,15 +30,8 @@ app = FastAPI(title="Auth Service", description="Authentication and Authorizatio
 
 @app.get("/health")
 async def health_check():
-    try:
-        # Check database connection
-        db = SessionLocal()
-        db.execute("SELECT 1")
-        db.close()
-        return {"status": "healthy"}
-    except Exception as e:
-        print(f"Health check failed: {str(e)}")
-        raise HTTPException(status_code=503, detail=str(e))
+    # Liveness probe - just check if the application is running
+    return {"status": "healthy"}
 
 @app.get("/ready")
 async def readiness_check():
