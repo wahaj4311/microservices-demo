@@ -121,20 +121,25 @@ stages:
                 services=("api-gateway" "auth-service" "product-service" "order-service")
                 for service in "${services[@]}"; do
                   echo "Updating $service manifests..."
-                  sed -i "s|image:.*|image: $(containerRegistry)/$(imageRepository)/$service:$(tag)|g" k8s/base/$service/deployment.yaml
+                  sed -i "s|image:.*|image: $(containerRegistry)/$(imageRepository)/$service:$(tag)|g" charts/microservices/templates/$service/deployment.yaml
                 done
 
-          # Apply k8s manifests
-          - task: Kubernetes@1
-            displayName: Deploy Services
+          # Apply k8s manifests using Helm
+          - task: HelmDeploy@0
+            displayName: Deploy Services with Helm
             inputs:
               connectionType: 'Azure Resource Manager'
-              azureSubscriptionEndpoint: 'azure-subscription-service-connection'
+              azureSubscription: 'azure-subscription-service-connection'
               azureResourceGroup: '$(resourceGroupName)'
               kubernetesCluster: '$(clusterName)'
               namespace: '$(namespace)'
-              command: 'apply'
-              arguments: '-R -f k8s/base/'
+              command: 'upgrade'
+              chartType: 'FilePath'
+              chartPath: './charts/microservices'
+              releaseName: 'microservices-demo'
+              install: true
+              waitForExecution: true
+              arguments: '--create-namespace --timeout 10m0s'
 
           - task: Bash@3
             displayName: Verify Deployment
