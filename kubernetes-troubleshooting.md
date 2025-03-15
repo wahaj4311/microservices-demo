@@ -335,3 +335,53 @@ The main issues with the Kubernetes deployment were:
 5. Pipeline validation errors
 
 By addressing these issues, we were able to successfully deploy the microservices-demo application to Kubernetes and update the Azure Pipeline to reflect these changes. 
+
+## Redeployment Test
+
+This section was added to test the automatic redeployment capability of the CI/CD pipeline after manually deleting the deployments from the Kubernetes cluster.
+
+## Variable Substitution Issue in Pipeline
+
+During our redeployment test, we encountered an issue with the CI/CD pipeline. When we deleted all deployments and triggered the pipeline, it reported that the deployments were "configured" but they weren't actually created. The pipeline output showed the following error:
+
+```
+sed: -e expression #1, char 8: Invalid back reference
+```
+
+### Root Cause
+
+The issue was with the `sed` commands used for variable substitution in the pipeline:
+
+```bash
+sed -i "s|\\$(namespace)|${namespace}|g" $TEMP_FILE
+sed -i "s|\\$(containerRegistry)|${containerRegistry}|g" $TEMP_FILE
+sed -i "s|\\$(imageRepository)|${imageRepository}|g" $TEMP_FILE
+sed -i "s|\\$(tag)|${tag}|g" $TEMP_FILE
+```
+
+These commands were attempting to replace Azure DevOps variables (e.g., `$(namespace)`) with their values, but the backslash escaping was causing issues with the regular expression syntax, resulting in the "Invalid back reference" error.
+
+### Solution
+
+We replaced the problematic `sed` commands with a more reliable approach using `envsubst`:
+
+```bash
+# Set environment variables
+export NAMESPACE="${namespace}"
+export CONTAINER_REGISTRY="${containerRegistry}"
+export IMAGE_REPOSITORY="${imageRepository}"
+export TAG="${tag}"
+
+# Use envsubst to replace variables
+cat $TEMP_FILE | envsubst > ${TEMP_FILE}.replaced
+mv ${TEMP_FILE}.replaced $TEMP_FILE
+```
+
+We also updated the manifest template to use the new environment variable format (`$NAMESPACE`, `$CONTAINER_REGISTRY`, etc.) instead of the Azure DevOps variables (`$(namespace)`, `$(containerRegistry)`, etc.).
+
+This approach is more reliable because:
+1. It avoids complex regular expressions and escaping issues
+2. It uses the standard Linux tool `envsubst` which is designed specifically for variable substitution
+3. It's more readable and maintainable
+
+After implementing this fix, the pipeline successfully redeployed all services when they were deleted. 

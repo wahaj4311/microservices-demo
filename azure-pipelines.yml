@@ -137,7 +137,7 @@ stages:
                 kind: Deployment
                 metadata:
                   name: api-gateway
-                  namespace: $(namespace)
+                  namespace: $NAMESPACE
                 spec:
                   replicas: 2
                   selector:
@@ -153,7 +153,7 @@ stages:
                       - name: acr-secret
                       containers:
                       - name: api-gateway
-                        image: $(containerRegistry)/$(imageRepository)/api-gateway:$(tag)
+                        image: $CONTAINER_REGISTRY/$IMAGE_REPOSITORY/api-gateway:$TAG
                         ports:
                         # Changed port from 80 to 8000
                         - containerPort: 8000
@@ -170,7 +170,7 @@ stages:
                 kind: Service
                 metadata:
                   name: api-gateway
-                  namespace: $(namespace)
+                  namespace: $NAMESPACE
                 spec:
                   type: LoadBalancer
                   ports:
@@ -184,7 +184,7 @@ stages:
                 kind: Deployment
                 metadata:
                   name: auth-service
-                  namespace: $(namespace)
+                  namespace: $NAMESPACE
                 spec:
                   replicas: 2
                   selector:
@@ -200,7 +200,7 @@ stages:
                       - name: acr-secret
                       containers:
                       - name: auth-service
-                        image: $(containerRegistry)/$(imageRepository)/auth-service:$(tag)
+                        image: $CONTAINER_REGISTRY/$IMAGE_REPOSITORY/auth-service:$TAG
                         ports:
                         # Changed port from 80 to 8001
                         - containerPort: 8001
@@ -218,7 +218,7 @@ stages:
                 kind: Service
                 metadata:
                   name: auth-service
-                  namespace: $(namespace)
+                  namespace: $NAMESPACE
                 spec:
                   ports:
                   # Changed port from 80 to 8001
@@ -231,7 +231,7 @@ stages:
                 kind: Deployment
                 metadata:
                   name: product-service
-                  namespace: $(namespace)
+                  namespace: $NAMESPACE
                 spec:
                   replicas: 2
                   selector:
@@ -247,7 +247,7 @@ stages:
                       - name: acr-secret
                       containers:
                       - name: product-service
-                        image: $(containerRegistry)/$(imageRepository)/product-service:$(tag)
+                        image: $CONTAINER_REGISTRY/$IMAGE_REPOSITORY/product-service:$TAG
                         ports:
                         # Changed port from 80 to 8002
                         - containerPort: 8002
@@ -265,7 +265,7 @@ stages:
                 kind: Service
                 metadata:
                   name: product-service
-                  namespace: $(namespace)
+                  namespace: $NAMESPACE
                 spec:
                   ports:
                   # Changed port from 80 to 8002
@@ -278,7 +278,7 @@ stages:
                 kind: Deployment
                 metadata:
                   name: order-service
-                  namespace: $(namespace)
+                  namespace: $NAMESPACE
                 spec:
                   replicas: 2
                   selector:
@@ -294,7 +294,7 @@ stages:
                       - name: acr-secret
                       containers:
                       - name: order-service
-                        image: $(containerRegistry)/$(imageRepository)/order-service:$(tag)
+                        image: $CONTAINER_REGISTRY/$IMAGE_REPOSITORY/order-service:$TAG
                         ports:
                         # Changed port from 80 to 8003
                         - containerPort: 8003
@@ -314,7 +314,7 @@ stages:
                 kind: Service
                 metadata:
                   name: order-service
-                  namespace: $(namespace)
+                  namespace: $NAMESPACE
                 spec:
                   ports:
                   # Changed port from 80 to 8003
@@ -324,11 +324,16 @@ stages:
                     app: order-service
                 EOF
                 
-                # Replace variables in the manifest file
-                sed -i "s|\\$(namespace)|${namespace}|g" $TEMP_FILE
-                sed -i "s|\\$(containerRegistry)|${containerRegistry}|g" $TEMP_FILE
-                sed -i "s|\\$(imageRepository)|${imageRepository}|g" $TEMP_FILE
-                sed -i "s|\\$(tag)|${tag}|g" $TEMP_FILE
+                # Replace variables in the manifest file using a more reliable approach
+                # Use environment variables directly in the manifest file
+                export NAMESPACE="${namespace}"
+                export CONTAINER_REGISTRY="${containerRegistry}"
+                export IMAGE_REPOSITORY="${imageRepository}"
+                export TAG="${tag}"
+                
+                # Use envsubst to replace variables
+                cat $TEMP_FILE | envsubst > ${TEMP_FILE}.replaced
+                mv ${TEMP_FILE}.replaced $TEMP_FILE
                 
                 # Apply the manifests with validation disabled
                 kubectl apply -f $TEMP_FILE --validate=false
