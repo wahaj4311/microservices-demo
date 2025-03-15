@@ -17,6 +17,10 @@ variables:
   # Kubernetes service connection
   kubernetesServiceConnection: 'aks-service-connection'
   namespace: 'microservices-demo'
+  
+  # AKS cluster information
+  resourceGroupName: 'microservices-demo-rg'
+  clusterName: 'microservices-demo-aks'
 
 stages:
 - stage: Build
@@ -112,32 +116,27 @@ stages:
       runOnce:
         deploy:
           steps:
-          # Use a bash script to explicitly set KUBECONFIG and run kubectl
-          - task: Bash@3
-            displayName: Deploy to Kubernetes cluster
+          # Replace Kubernetes tasks with script that uses az CLI for authentication
+          - task: AzureCLI@2
+            displayName: Deploy to AKS using az CLI
             inputs:
-              targetType: 'inline'
-              script: |
-                # Ensure KUBECONFIG is set
-                export KUBECONFIG=~/.kube/config
-                
-                # Check current context
-                echo "Current Kubernetes context:"
-                kubectl config current-context || echo "No current context"
+              azureSubscription: 'azure-subscription-service-connection'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Get AKS credentials
+                az aks get-credentials --resource-group $(resourceGroupName) --name $(clusterName) --overwrite-existing
                 
                 # Create namespace if it doesn't exist
                 kubectl create namespace $(namespace) --dry-run=client -o yaml | kubectl apply -f -
                 
-                # Create a temporary file for the Kubernetes manifests
-                TEMP_FILE=$(mktemp)
-                
-                # Write the manifests to the temporary file
-                cat > $TEMP_FILE << 'EOF'
+                # Apply Kubernetes manifests with validation disabled
+                cat <<EOF | kubectl apply -f - --validate=false
                 apiVersion: apps/v1
                 kind: Deployment
                 metadata:
                   name: api-gateway
-                  namespace: $NAMESPACE
+                  namespace: $(namespace)
                 spec:
                   replicas: 2
                   selector:
@@ -148,29 +147,33 @@ stages:
                       labels:
                         app: api-gateway
                     spec:
+                      # Added imagePullSecrets
                       imagePullSecrets:
-                        - name: acr-secret
+                      - name: acr-secret
                       containers:
-                        - name: api-gateway
-                          image: $CONTAINER_REGISTRY/$IMAGE_REPOSITORY/api-gateway:$TAG
-                          ports:
-                            - containerPort: 8000
-                          env:
-                            - name: AUTH_SERVICE_URL
-                              value: "http://auth-service:8001"
-                            - name: PRODUCT_SERVICE_URL
-                              value: "http://product-service:8002"
-                            - name: ORDER_SERVICE_URL
-                              value: "http://order-service:8003"
+                      - name: api-gateway
+                        image: $(containerRegistry)/$(imageRepository)/api-gateway:$(tag)
+                        ports:
+                        # Changed port from 80 to 8000
+                        - containerPort: 8000
+                        # Added environment variables
+                        env:
+                        - name: AUTH_SERVICE_URL
+                          value: "http://auth-service:8001"
+                        - name: PRODUCT_SERVICE_URL
+                          value: "http://product-service:8002"
+                        - name: ORDER_SERVICE_URL
+                          value: "http://order-service:8003"
                 ---
                 apiVersion: v1
                 kind: Service
                 metadata:
                   name: api-gateway
-                  namespace: $NAMESPACE
+                  namespace: $(namespace)
                 spec:
                   type: LoadBalancer
                   ports:
+                  # Changed port from 80 to 8000
                   - port: 8000
                     targetPort: 8000
                   selector:
@@ -180,7 +183,7 @@ stages:
                 kind: Deployment
                 metadata:
                   name: auth-service
-                  namespace: $NAMESPACE
+                  namespace: $(namespace)
                 spec:
                   replicas: 2
                   selector:
@@ -191,13 +194,16 @@ stages:
                       labels:
                         app: auth-service
                     spec:
+                      # Added imagePullSecrets
                       imagePullSecrets:
                       - name: acr-secret
                       containers:
                       - name: auth-service
-                        image: $CONTAINER_REGISTRY/$IMAGE_REPOSITORY/auth-service:$TAG
+                        image: $(containerRegistry)/$(imageRepository)/auth-service:$(tag)
                         ports:
+                        # Changed port from 80 to 8001
                         - containerPort: 8001
+                        # Added environment variables
                         env:
                         - name: SQLALCHEMY_DATABASE_URL
                           valueFrom:
@@ -211,9 +217,10 @@ stages:
                 kind: Service
                 metadata:
                   name: auth-service
-                  namespace: $NAMESPACE
+                  namespace: $(namespace)
                 spec:
                   ports:
+                  # Changed port from 80 to 8001
                   - port: 8001
                     targetPort: 8001
                   selector:
@@ -223,7 +230,7 @@ stages:
                 kind: Deployment
                 metadata:
                   name: product-service
-                  namespace: $NAMESPACE
+                  namespace: $(namespace)
                 spec:
                   replicas: 2
                   selector:
@@ -234,13 +241,16 @@ stages:
                       labels:
                         app: product-service
                     spec:
+                      # Added imagePullSecrets
                       imagePullSecrets:
                       - name: acr-secret
                       containers:
                       - name: product-service
-                        image: $CONTAINER_REGISTRY/$IMAGE_REPOSITORY/product-service:$TAG
+                        image: $(containerRegistry)/$(imageRepository)/product-service:$(tag)
                         ports:
+                        # Changed port from 80 to 8002
                         - containerPort: 8002
+                        # Added environment variables
                         env:
                         - name: SQLALCHEMY_DATABASE_URL
                           valueFrom:
@@ -254,9 +264,10 @@ stages:
                 kind: Service
                 metadata:
                   name: product-service
-                  namespace: $NAMESPACE
+                  namespace: $(namespace)
                 spec:
                   ports:
+                  # Changed port from 80 to 8002
                   - port: 8002
                     targetPort: 8002
                   selector:
@@ -266,7 +277,7 @@ stages:
                 kind: Deployment
                 metadata:
                   name: order-service
-                  namespace: $NAMESPACE
+                  namespace: $(namespace)
                 spec:
                   replicas: 2
                   selector:
@@ -277,13 +288,16 @@ stages:
                       labels:
                         app: order-service
                     spec:
+                      # Added imagePullSecrets
                       imagePullSecrets:
                       - name: acr-secret
                       containers:
                       - name: order-service
-                        image: $CONTAINER_REGISTRY/$IMAGE_REPOSITORY/order-service:$TAG
+                        image: $(containerRegistry)/$(imageRepository)/order-service:$(tag)
                         ports:
+                        # Changed port from 80 to 8003
                         - containerPort: 8003
+                        # Added environment variables
                         env:
                         - name: SQLALCHEMY_DATABASE_URL
                           valueFrom:
@@ -299,28 +313,12 @@ stages:
                 kind: Service
                 metadata:
                   name: order-service
-                  namespace: $NAMESPACE
+                  namespace: $(namespace)
                 spec:
                   ports:
+                  # Changed port from 80 to 8003
                   - port: 8003
                     targetPort: 8003
                   selector:
                     app: order-service
-                EOF
-                
-                # Replace variables in the manifest file using a more reliable approach
-                # Use environment variables directly in the manifest file
-                export NAMESPACE="${namespace}"
-                export CONTAINER_REGISTRY="${containerRegistry}"
-                export IMAGE_REPOSITORY="${imageRepository}"
-                export TAG="${tag}"
-                
-                # Use envsubst to replace variables
-                cat $TEMP_FILE | envsubst > ${TEMP_FILE}.replaced
-                mv ${TEMP_FILE}.replaced $TEMP_FILE
-                
-                # Apply the manifests with validation disabled
-                kubectl apply -f $TEMP_FILE --validate=false
-                
-                # Clean up
-                rm $TEMP_FILE 
+                EOF 
