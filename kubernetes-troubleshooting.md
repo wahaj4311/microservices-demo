@@ -202,6 +202,14 @@ During the deployment stage of the pipeline, the following error was encountered
 ##[error]The process '/usr/bin/kubectl' failed with exit code 1
 ```
 
+Even after adding the `--validate=false` flag, we encountered a more persistent authentication error:
+
+```
+E0315 13:17:29.938117   33217 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: the server has asked for the client to provide credentials"
+unable to recognize "/home/xma/azagent/_work/_temp/kubectlTask/1742026648764/inlineconfig.yaml": the server has asked for the client to provide credentials
+##[error]The process '/usr/bin/kubectl' failed with exit code 1
+```
+
 ### Root Cause
 
 This error occurs because the Kubernetes API server is requesting authentication credentials, but the pipeline task is not properly configured to provide them. This is typically due to one of the following issues:
@@ -209,6 +217,7 @@ This error occurs because the Kubernetes API server is requesting authentication
 1. **Service Connection Issues**: The Kubernetes service connection in Azure DevOps may not have the correct credentials or permissions.
 2. **RBAC Configuration**: The service account used by the pipeline may not have the necessary RBAC permissions in the Kubernetes cluster.
 3. **Validation Issues**: The Kubernetes manifest may contain syntax or validation errors.
+4. **Authentication Context**: The kubectl command is not properly authenticated with the Kubernetes cluster.
 
 ### Solution
 
@@ -218,26 +227,24 @@ To resolve this issue, the following steps were taken:
    - Verified and updated the Kubernetes service connection in Azure DevOps with the correct credentials.
 
 2. **Added `--validate=false` Flag**:
-   - Modified the Kubernetes task in the pipeline to include the `--validate=false` flag to bypass validation:
+   - Modified the Kubernetes task in the pipeline to include the `--validate=false` flag to bypass validation.
+
+3. **Added Explicit Authentication Step**:
+   - Added a separate Kubernetes task to explicitly set up the authentication context before running the kubectl apply command:
 
    ```yaml
    - task: Kubernetes@1
-     displayName: Deploy to Kubernetes cluster
+     displayName: Set Kubernetes Context
      inputs:
        connectionType: 'Kubernetes Service Connection'
        kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
-       namespace: '$(namespace)'
-       command: 'apply'
-       useConfigurationFile: true
-       arguments: '--validate=false'
-       inline: |
-         # Kubernetes manifests...
+       command: 'login'
    ```
 
-3. **Verified RBAC Permissions**:
+4. **Verified RBAC Permissions**:
    - Ensured that the service account used by the pipeline has the necessary RBAC permissions in the Kubernetes cluster.
 
-4. **Split Manifests**:
+5. **Split Manifests**:
    - As an alternative approach, split the large inline manifest into separate files and used the `kubectl apply -f` command with a directory containing these files.
 
 After implementing these changes, the pipeline was able to successfully deploy the application to the Kubernetes cluster.
