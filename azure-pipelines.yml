@@ -141,6 +141,21 @@ stages:
                   sed -i "s|image:.*|image: $(containerRegistry)/$(imageRepository)/$service:$(tag)|g" charts/microservices/templates/$service/deployment.yaml
                 done
 
+          # Debug Helm and chart
+          - task: Bash@3
+            displayName: Debug Helm Setup
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "Helm version:"
+                helm version
+                echo "Helm list:"
+                helm list -n $(namespace)
+                echo "Validating chart:"
+                helm lint ./charts/microservices
+                echo "Template validation:"
+                helm template --debug ./charts/microservices
+
           # Apply k8s manifests using Helm
           - task: HelmDeploy@0
             displayName: Deploy Services with Helm
@@ -156,7 +171,37 @@ stages:
               releaseName: 'microservices-demo'
               install: true
               waitForExecution: true
-              arguments: '--create-namespace --timeout 10m0s'
+              arguments: >
+                --create-namespace 
+                --timeout 10m0s 
+                --debug 
+                --dry-run 
+                --set containerRegistry=$(containerRegistry) 
+                --set imageRepository=$(imageRepository) 
+                --set tag=$(tag)
+
+          # If dry run succeeds, do the actual deployment
+          - task: HelmDeploy@0
+            displayName: Deploy Services with Helm (Actual)
+            condition: succeeded()
+            inputs:
+              connectionType: 'Azure Resource Manager'
+              azureSubscription: 'azure-subscription-service-connection'
+              azureResourceGroup: '$(resourceGroupName)'
+              kubernetesCluster: '$(clusterName)'
+              namespace: '$(namespace)'
+              command: 'upgrade'
+              chartType: 'FilePath'
+              chartPath: './charts/microservices'
+              releaseName: 'microservices-demo'
+              install: true
+              waitForExecution: true
+              arguments: >
+                --create-namespace 
+                --timeout 10m0s 
+                --set containerRegistry=$(containerRegistry) 
+                --set imageRepository=$(imageRepository) 
+                --set tag=$(tag)
 
           - task: Bash@3
             displayName: Verify Deployment

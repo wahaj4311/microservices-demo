@@ -36,7 +36,7 @@ redis:
 
 # API Gateway configuration
 apiGateway:
-  image: microservicesdemodevacred7ulf27.azurecr.io/microservices-demo/api-gateway:latest
+  image: "{{ .Values.containerRegistry }}/{{ .Values.imageRepository }}/api-gateway:{{ .Values.tag }}"
   replicas: 2
   resources:
     requests:
@@ -56,7 +56,7 @@ apiGateway:
 
 # Auth Service configuration
 authService:
-  image: microservicesdemodevacred7ulf27.azurecr.io/microservices-demo/auth-service:latest
+  image: "{{ .Values.containerRegistry }}/{{ .Values.imageRepository }}/auth-service:{{ .Values.tag }}"
   replicas: 2
   resources:
     requests:
@@ -74,7 +74,7 @@ authService:
 
 # Product Service configuration
 productService:
-  image: microservicesdemodevacred7ulf27.azurecr.io/microservices-demo/product-service:latest
+  image: "{{ .Values.containerRegistry }}/{{ .Values.imageRepository }}/product-service:{{ .Values.tag }}"
   replicas: 2
   resources:
     requests:
@@ -92,7 +92,7 @@ productService:
 
 # Order Service configuration
 orderService:
-  image: microservicesdemodevacred7ulf27.azurecr.io/microservices-demo/order-service:latest
+  image: "{{ .Values.containerRegistry }}/{{ .Values.imageRepository }}/order-service:{{ .Values.tag }}"
   replicas: 2
   resources:
     requests:
