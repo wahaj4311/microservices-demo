@@ -112,17 +112,27 @@ stages:
       runOnce:
         deploy:
           steps:
-          # Use kubectl directly with the Kubernetes service connection
-          - task: Kubernetes@1
+          # Use a bash script to explicitly set KUBECONFIG and run kubectl
+          - task: Bash@3
             displayName: Deploy to Kubernetes cluster
             inputs:
-              connectionType: 'Kubernetes Service Connection'
-              kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
-              namespace: '$(namespace)'
-              command: 'apply'
-              useConfigurationFile: true
-              arguments: '--validate=false'
-              inline: |
+              targetType: 'inline'
+              script: |
+                # Ensure KUBECONFIG is set
+                export KUBECONFIG=~/.kube/config
+                
+                # Check current context
+                echo "Current Kubernetes context:"
+                kubectl config current-context || echo "No current context"
+                
+                # Create namespace if it doesn't exist
+                kubectl create namespace $(namespace) --dry-run=client -o yaml | kubectl apply -f -
+                
+                # Create a temporary file for the Kubernetes manifests
+                TEMP_FILE=$(mktemp)
+                
+                # Write the manifests to the temporary file
+                cat > $TEMP_FILE << 'EOF'
                 apiVersion: apps/v1
                 kind: Deployment
                 metadata:
@@ -311,4 +321,17 @@ stages:
                   - port: 8003
                     targetPort: 8003
                   selector:
-                    app: order-service 
+                    app: order-service
+                EOF
+                
+                # Replace variables in the manifest file
+                sed -i "s|\$(namespace)|${namespace}|g" $TEMP_FILE
+                sed -i "s|\$(containerRegistry)|${containerRegistry}|g" $TEMP_FILE
+                sed -i "s|\$(imageRepository)|${imageRepository}|g" $TEMP_FILE
+                sed -i "s|\$(tag)|${tag}|g" $TEMP_FILE
+                
+                # Apply the manifests with validation disabled
+                kubectl apply -f $TEMP_FILE --validate=false
+                
+                # Clean up
+                rm $TEMP_FILE 

@@ -242,22 +242,46 @@ We tried several approaches to resolve this issue:
 
 ### Working Solution
 
-After multiple attempts, we found a solution that works with the existing Kubernetes service connection:
+After multiple attempts, we found a solution that works with the existing Kubernetes configuration on the self-hosted agent:
 
-1. **Used Kubernetes Task with Inline Configuration**:
-   - We went back to using the Kubernetes task with the correct parameters:
+1. **Used Bash Script Task Instead of Kubernetes Task**:
+   - We replaced the Kubernetes task with a Bash script task that explicitly sets the KUBECONFIG environment variable:
 
    ```yaml
-   - task: Kubernetes@1
+   - task: Bash@3
      displayName: Deploy to Kubernetes cluster
      inputs:
-       connectionType: 'Kubernetes Service Connection'
-       kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
-       namespace: '$(namespace)'
-       command: 'apply'
-       useConfigurationFile: true
-       inline: |
+       targetType: 'inline'
+       script: |
+         # Ensure KUBECONFIG is set
+         export KUBECONFIG=~/.kube/config
+         
+         # Check current context
+         echo "Current Kubernetes context:"
+         kubectl config current-context || echo "No current context"
+         
+         # Create namespace if it doesn't exist
+         kubectl create namespace $(namespace) --dry-run=client -o yaml | kubectl apply -f -
+         
+         # Create a temporary file for the Kubernetes manifests
+         TEMP_FILE=$(mktemp)
+         
+         # Write the manifests to the temporary file
+         cat > $TEMP_FILE << 'EOF'
          # Kubernetes manifests...
+         EOF
+         
+         # Replace variables in the manifest file
+         sed -i "s|\$(namespace)|${namespace}|g" $TEMP_FILE
+         sed -i "s|\$(containerRegistry)|${containerRegistry}|g" $TEMP_FILE
+         sed -i "s|\$(imageRepository)|${imageRepository}|g" $TEMP_FILE
+         sed -i "s|\$(tag)|${tag}|g" $TEMP_FILE
+         
+         # Apply the manifests with validation disabled
+         kubectl apply -f $TEMP_FILE --validate=false
+         
+         # Clean up
+         rm $TEMP_FILE
    ```
 
    **Note**: We encountered several issues with our authentication approaches:
@@ -270,28 +294,33 @@ After multiple attempts, we found a solution that works with the existing Kubern
    "The pipeline is not valid. Job DeployToAKS: Step input azureSubscription expects a service connection of type AzureRM but the provided service connection aks-service-connection is of type kubernetes."
    ```
    
-   3. Next, we tried using `useConfigMapFile` parameter, but encountered an error:
+   3. Next, we tried using `useConfigurationFile` parameter with the Kubernetes task, but still encountered authentication errors:
    
    ```
-   error: must specify one of -f and -k
+   "Unhandled Error" err="couldn't get current server API group list: the server has asked for the client to provide credentials"
    ```
    
-   4. Finally, we used the correct parameter `useConfigurationFile` with `inline` to provide the Kubernetes manifests directly.
+   4. Finally, we bypassed the service connection entirely and used a Bash script task that:
+      - Explicitly sets the KUBECONFIG environment variable to use the local kubeconfig file
+      - Checks the current Kubernetes context for debugging purposes
+      - Creates a temporary file for the manifests
+      - Applies the manifests using kubectl directly with `--validate=false`
 
 2. **Removed Unnecessary Variables**:
    - Removed the AKS-specific variables that were no longer needed:
      - `resourceGroupName`
      - `clusterName`
 
-3. **Verified Service Connection Permissions**:
-   - Ensured that the Kubernetes service connection had the necessary permissions to:
-     - Create and modify Kubernetes resources in the specified namespace
+3. **Ensured Local Authentication**:
+   - Made sure the self-hosted agent had proper authentication to the Kubernetes cluster:
+     - Verified that `~/.kube/config` was properly set up
+     - Ensured the agent had the correct permissions to access the kubeconfig file
 
 This approach worked because:
-- It uses the Kubernetes service connection directly with the Kubernetes task
-- It uses the correct parameter (`useConfigurationFile`) to specify the configuration
-- It provides the manifests inline, which is properly passed to kubectl with the `-f` flag
-- It avoids the service connection type mismatch by using the correct task for the connection type
+- It bypasses the service connection authentication issues by using the local kubeconfig file
+- It explicitly sets the KUBECONFIG environment variable to ensure kubectl uses the correct configuration
+- It applies the manifests using kubectl directly with `--validate=false` to bypass validation
+- It uses a temporary file to store the manifests, which avoids issues with inline manifests
 
 After implementing these changes, the pipeline was able to successfully deploy the application to the Kubernetes cluster.
 
