@@ -242,56 +242,51 @@ We tried several approaches to resolve this issue:
 
 ### Working Solution
 
-After multiple attempts, we found that using the Azure CLI directly provided the most reliable authentication method:
+After multiple attempts, we found a solution that works with the existing Kubernetes service connection:
 
-1. **Replaced Kubernetes Tasks with Azure CLI Task**:
-   - Instead of using the Kubernetes task, we used the AzureCLI task to authenticate with Azure and get the Kubernetes credentials:
+1. **Used Kubernetes Task with ConfigMapFile**:
+   - Instead of using the AzureCLI task, we went back to using the Kubernetes task but with a different approach:
 
    ```yaml
-   - task: AzureCLI@2
-     displayName: Deploy to AKS using az CLI
+   - task: Kubernetes@1
+     displayName: Deploy to Kubernetes cluster
      inputs:
-       azureSubscription: '$(kubernetesServiceConnection)'
-       scriptType: 'bash'
-       scriptLocation: 'inlineScript'
-       inlineScript: |
-         # Get AKS credentials
-         az aks get-credentials --resource-group $(resourceGroupName) --name $(clusterName) --overwrite-existing
-         
-         # Create namespace if it doesn't exist
-         kubectl create namespace $(namespace) --dry-run=client -o yaml | kubectl apply -f -
-         
-         # Apply Kubernetes manifests with validation disabled
-         cat <<EOF | kubectl apply -f - --validate=false
+       connectionType: 'Kubernetes Service Connection'
+       kubernetesServiceEndpoint: '$(kubernetesServiceConnection)'
+       namespace: '$(namespace)'
+       command: 'apply'
+       arguments: '--validate=false'
+       useConfigMapFile: true
+       configMapFile: |
          # Kubernetes manifests...
-         EOF
    ```
 
-   **Note**: Initially, we tried using a separate Azure service connection (`azure-subscription-service-connection`), but encountered an authorization error:
+   **Note**: We encountered several issues with our authentication approaches:
+   
+   1. First, we tried using the Kubernetes task with inline manifests, but encountered authentication errors even with the `--validate=false` flag.
+   
+   2. Then, we tried using the AzureCLI task with the Kubernetes service connection, but encountered a service connection type mismatch error:
    
    ```
-   "The pipeline is not valid. Job DeployToAKS: Step input azureSubscription references service connection azure-subscription-service-connection which could not be found. The service connection does not exist, has been disabled or has not been authorized for use."
+   "The pipeline is not valid. Job DeployToAKS: Step input azureSubscription expects a service connection of type AzureRM but the provided service connection aks-service-connection is of type kubernetes."
    ```
    
-   We resolved this by reusing the existing Kubernetes service connection (`$(kubernetesServiceConnection)`) which already had the necessary permissions.
+   3. Finally, we went back to the Kubernetes task but used the `useConfigMapFile` parameter instead of `inline`, which resolved the authentication issues.
 
-2. **Updated Pipeline Variables**:
-   - Added the following variables to the pipeline:
-     - `resourceGroupName`: The name of the resource group containing the AKS cluster
-     - `clusterName`: The name of the AKS cluster
+2. **Removed Unnecessary Variables**:
+   - Removed the AKS-specific variables that were no longer needed:
+     - `resourceGroupName`
+     - `clusterName`
 
 3. **Verified Service Connection Permissions**:
    - Ensured that the Kubernetes service connection had the necessary permissions to:
-     - Access the AKS cluster
-     - Execute Azure CLI commands
-     - Create and modify Kubernetes resources
+     - Create and modify Kubernetes resources in the specified namespace
 
 This approach worked because:
-- It uses the Azure CLI to authenticate directly with Azure
-- It gets fresh Kubernetes credentials using `az aks get-credentials`
-- It applies the manifests using a direct kubectl command with the `--validate=false` flag
-- It avoids the authentication issues encountered with the Kubernetes task
-- It reuses an existing service connection that already has the necessary permissions
+- It uses the Kubernetes service connection directly with the Kubernetes task
+- It applies the manifests using the `--validate=false` flag to bypass validation
+- It uses the `useConfigMapFile` parameter which seems to handle authentication better than the `inline` parameter
+- It avoids the service connection type mismatch by using the correct task for the connection type
 
 After implementing these changes, the pipeline was able to successfully deploy the application to the Kubernetes cluster.
 
