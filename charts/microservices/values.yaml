@@ -1,0 +1,114 @@
+# PostgreSQL configurations
+postgres:
+  auth:
+    image: postgres:15
+    persistence:
+      enabled: true
+      size: 1Gi
+    env:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth_db
+  product:
+    image: postgres:15
+    persistence:
+      enabled: true
+      size: 1Gi
+    env:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: product_db
+  order:
+    image: postgres:15
+    persistence:
+      enabled: true
+      size: 1Gi
+    env:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: order_db
+
+# Redis configuration
+redis:
+  image: redis:7
+  persistence:
+    enabled: false
+
+# API Gateway configuration
+apiGateway:
+  image: microservicesdemodevacred7ulf27.azurecr.io/microservices-demo/api-gateway:latest
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  env:
+    AUTH_SERVICE_URL: http://auth-service:8001
+    PRODUCT_SERVICE_URL: http://product-service:8002
+    ORDER_SERVICE_URL: http://order-service:8003
+  service:
+    type: LoadBalancer
+    port: 8000
+    targetPort: 8000
+
+# Auth Service configuration
+authService:
+  image: microservicesdemodevacred7ulf27.azurecr.io/microservices-demo/auth-service:latest
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  env:
+    SQLALCHEMY_DATABASE_URL: postgresql://postgres:postgres@postgres-auth:5432/auth_db
+    REDIS_URL: redis://redis:6379/0
+  service:
+    type: ClusterIP
+    port: 8001
+
+# Product Service configuration
+productService:
+  image: microservicesdemodevacred7ulf27.azurecr.io/microservices-demo/product-service:latest
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  env:
+    SQLALCHEMY_DATABASE_URL: postgresql://postgres:postgres@postgres-product:5432/product_db
+    REDIS_URL: redis://redis:6379/1
+  service:
+    type: ClusterIP
+    port: 8002
+
+# Order Service configuration
+orderService:
+  image: microservicesdemodevacred7ulf27.azurecr.io/microservices-demo/order-service:latest
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  env:
+    SQLALCHEMY_DATABASE_URL: postgresql://postgres:postgres@postgres-order:5432/order_db
+    REDIS_URL: redis://redis:6379/2
+    PRODUCT_SERVICE_URL: http://product-service:8002
+  service:
+    type: ClusterIP
+    port: 8003
+
+# Image pull secrets
+imagePullSecrets:
+  - name: acr-secret

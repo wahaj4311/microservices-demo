@@ -1,0 +1,59 @@
+{{- range $key, $db := .Values.postgres }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-{{ $key }}-pvc
+  namespace: {{ $.Release.Namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ $db.persistence.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-{{ $key }}
+  namespace: {{ $.Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: postgres-{{ $key }}
+  template:
+    metadata:
+      labels:
+        app: postgres-{{ $key }}
+    spec:
+      containers:
+      - name: postgres
+        image: {{ $db.image }}
+        env:
+        {{- range $envKey, $envValue := $db.env }}
+        - name: {{ $envKey }}
+          value: {{ $envValue | quote }}
+        {{- end }}
+        - name: PGDATA
+          value: "/var/lib/postgresql/data/pgdata"
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-{{ $key }}-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-{{ $key }}
+  namespace: {{ $.Release.Namespace }}
+spec:
+  selector:
+    app: postgres-{{ $key }}
+  ports:
+  - port: 5432
+{{- end }} 

@@ -29,55 +29,28 @@ stages:
   - job: BuildAndPush
     displayName: Build and Push
     pool:
-      vmImage: 'ubuntu-latest'  # Using Azure-hosted agent instead of self-hosted
+      vmImage: 'ubuntu-latest'
     steps:
-    # API Gateway
-    - task: Docker@2
-      displayName: Build and Push API Gateway
+    - task: Bash@3
+      displayName: Configure logging
       inputs:
-        containerRegistry: '$(dockerRegistryServiceConnection)'
-        repository: '$(imageRepository)/api-gateway'
-        command: 'buildAndPush'
-        Dockerfile: 'api-gateway/Dockerfile'
-        tags: |
-          $(tag)
-          latest
-    
-    # Auth Service
-    - task: Docker@2
-      displayName: Build and Push Auth Service
-      inputs:
-        containerRegistry: '$(dockerRegistryServiceConnection)'
-        repository: '$(imageRepository)/auth-service'
-        command: 'buildAndPush'
-        Dockerfile: 'auth-service/Dockerfile'
-        tags: |
-          $(tag)
-          latest
-    
-    # Product Service
-    - task: Docker@2
-      displayName: Build and Push Product Service
-      inputs:
-        containerRegistry: '$(dockerRegistryServiceConnection)'
-        repository: '$(imageRepository)/product-service'
-        command: 'buildAndPush'
-        Dockerfile: 'product-service/Dockerfile'
-        tags: |
-          $(tag)
-          latest
-    
-    # Order Service
-    - task: Docker@2
-      displayName: Build and Push Order Service
-      inputs:
-        containerRegistry: '$(dockerRegistryServiceConnection)'
-        repository: '$(imageRepository)/order-service'
-        command: 'buildAndPush'
-        Dockerfile: 'order-service/Dockerfile'
-        tags: |
-          $(tag)
-          latest
+        targetType: 'inline'
+        script: |
+          echo "Starting build process at $(date)"
+          echo "Build ID: $(Build.BuildId)"
+          echo "Branch: $(Build.SourceBranch)"
+
+    # Build and push all services in a loop
+    - bash: |
+        services=("api-gateway" "auth-service" "product-service" "order-service")
+        for service in "${services[@]}"; do
+          echo "Building $service..."
+          docker build -t $(containerRegistry)/$(imageRepository)/$service:$(tag) $service/
+          echo "Pushing $service..."
+          docker push $(containerRegistry)/$(imageRepository)/$service:$(tag)
+          echo "$service build and push completed"
+        done
+      displayName: 'Build and Push Services'
 
 # =====================================================================
 # DEPLOYMENT STAGE
@@ -110,28 +83,22 @@ stages:
   - deployment: DeployToAKS
     displayName: Deploy to AKS
     pool:
-      vmImage: 'ubuntu-latest'  # Using Azure-hosted agent instead of self-hosted
+      vmImage: 'ubuntu-latest'
     environment: 'development'
     strategy:
       runOnce:
         deploy:
           steps:
-          # Add debug task to check connection
           - task: Bash@3
-            displayName: Debug Kubernetes Connection
+            displayName: Debug and Logging
             inputs:
               targetType: 'inline'
               script: |
-                echo "Checking Azure CLI version"
-                az --version
-                echo "Checking kubectl version"
+                echo "Starting deployment at $(date)"
+                echo "Namespace: $(namespace)"
+                echo "Cluster: $(clusterName)"
                 kubectl version --client
-                echo "Checking current context"
-                kubectl config current-context || echo "No current context"
-                echo "Listing available contexts"
-                kubectl config get-contexts || echo "No contexts available"
-          
-          # Add Azure CLI task to get credentials properly
+                
           - task: AzureCLI@2
             displayName: Get AKS Credentials
             inputs:
@@ -139,18 +106,27 @@ stages:
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               inlineScript: |
-                # Get AKS credentials with admin access
+                echo "Getting AKS credentials..."
                 az aks get-credentials --resource-group $(resourceGroupName) --name $(clusterName) --admin --overwrite-existing
-                
-                # Verify connection
-                kubectl get nodes
-                
-                # Create namespace if it doesn't exist
                 kubectl create namespace $(namespace) --dry-run=client -o yaml | kubectl apply -f -
-          
-          # Deploy API Gateway
+                echo "Namespace status:"
+                kubectl get namespace $(namespace)
+
+          # Update image tags in k8s manifests
+          - task: Bash@3
+            displayName: Update K8s Manifests
+            inputs:
+              targetType: 'inline'
+              script: |
+                services=("api-gateway" "auth-service" "product-service" "order-service")
+                for service in "${services[@]}"; do
+                  echo "Updating $service manifests..."
+                  sed -i "s|image:.*|image: $(containerRegistry)/$(imageRepository)/$service:$(tag)|g" k8s/base/$service/deployment.yaml
+                done
+
+          # Apply k8s manifests
           - task: Kubernetes@1
-            displayName: Deploy API Gateway
+            displayName: Deploy Services
             inputs:
               connectionType: 'Azure Resource Manager'
               azureSubscriptionEndpoint: 'azure-subscription-service-connection'
@@ -158,226 +134,14 @@ stages:
               kubernetesCluster: '$(clusterName)'
               namespace: '$(namespace)'
               command: 'apply'
-              arguments: '-f - --validate=false'
-              secretType: 'dockerRegistry'
-              containerRegistryType: 'Azure Container Registry'
-              inputType: 'inline'
-              inline: |
-                apiVersion: apps/v1
-                kind: Deployment
-                metadata:
-                  name: api-gateway
-                  namespace: $(namespace)
-                spec:
-                  replicas: 2
-                  selector:
-                    matchLabels:
-                      app: api-gateway
-                  template:
-                    metadata:
-                      labels:
-                        app: api-gateway
-                    spec:
-                      imagePullSecrets:
-                      - name: acr-secret
-                      containers:
-                      - name: api-gateway
-                        image: $(containerRegistry)/$(imageRepository)/api-gateway:$(tag)
-                        ports:
-                        - containerPort: 8000
-                        env:
-                        - name: AUTH_SERVICE_URL
-                          value: "http://auth-service:8001"
-                        - name: PRODUCT_SERVICE_URL
-                          value: "http://product-service:8002"
-                        - name: ORDER_SERVICE_URL
-                          value: "http://order-service:8003"
-                ---
-                apiVersion: v1
-                kind: Service
-                metadata:
-                  name: api-gateway
-                  namespace: $(namespace)
-                spec:
-                  type: LoadBalancer
-                  ports:
-                  - port: 8000
-                    targetPort: 8000
-                  selector:
-                    app: api-gateway
-          
-          # Deploy Auth Service
-          - task: Kubernetes@1
-            displayName: Deploy Auth Service
+              arguments: '-R -f k8s/base/'
+
+          - task: Bash@3
+            displayName: Verify Deployment
             inputs:
-              connectionType: 'Azure Resource Manager'
-              azureSubscriptionEndpoint: 'azure-subscription-service-connection'
-              azureResourceGroup: '$(resourceGroupName)'
-              kubernetesCluster: '$(clusterName)'
-              namespace: '$(namespace)'
-              command: 'apply'
-              arguments: '-f - --validate=false'
-              secretType: 'dockerRegistry'
-              containerRegistryType: 'Azure Container Registry'
-              inputType: 'inline'
-              inline: |
-                apiVersion: apps/v1
-                kind: Deployment
-                metadata:
-                  name: auth-service
-                  namespace: $(namespace)
-                spec:
-                  replicas: 2
-                  selector:
-                    matchLabels:
-                      app: auth-service
-                  template:
-                    metadata:
-                      labels:
-                        app: auth-service
-                    spec:
-                      imagePullSecrets:
-                      - name: acr-secret
-                      containers:
-                      - name: auth-service
-                        image: $(containerRegistry)/$(imageRepository)/auth-service:$(tag)
-                        ports:
-                        - containerPort: 8001
-                        env:
-                        - name: SQLALCHEMY_DATABASE_URL
-                          valueFrom:
-                            secretKeyRef:
-                              name: auth-secrets
-                              key: SQLALCHEMY_DATABASE_URL
-                        - name: REDIS_URL
-                          value: "redis://redis:6379/0"
-                ---
-                apiVersion: v1
-                kind: Service
-                metadata:
-                  name: auth-service
-                  namespace: $(namespace)
-                spec:
-                  ports:
-                  - port: 8001
-                    targetPort: 8001
-                  selector:
-                    app: auth-service
-          
-          # Deploy Product Service
-          - task: Kubernetes@1
-            displayName: Deploy Product Service
-            inputs:
-              connectionType: 'Azure Resource Manager'
-              azureSubscriptionEndpoint: 'azure-subscription-service-connection'
-              azureResourceGroup: '$(resourceGroupName)'
-              kubernetesCluster: '$(clusterName)'
-              namespace: '$(namespace)'
-              command: 'apply'
-              arguments: '-f - --validate=false'
-              secretType: 'dockerRegistry'
-              containerRegistryType: 'Azure Container Registry'
-              inputType: 'inline'
-              inline: |
-                apiVersion: apps/v1
-                kind: Deployment
-                metadata:
-                  name: product-service
-                  namespace: $(namespace)
-                spec:
-                  replicas: 2
-                  selector:
-                    matchLabels:
-                      app: product-service
-                  template:
-                    metadata:
-                      labels:
-                        app: product-service
-                    spec:
-                      imagePullSecrets:
-                      - name: acr-secret
-                      containers:
-                      - name: product-service
-                        image: $(containerRegistry)/$(imageRepository)/product-service:$(tag)
-                        ports:
-                        - containerPort: 8002
-                        env:
-                        - name: SQLALCHEMY_DATABASE_URL
-                          valueFrom:
-                            secretKeyRef:
-                              name: product-secrets
-                              key: SQLALCHEMY_DATABASE_URL
-                        - name: REDIS_URL
-                          value: "redis://redis:6379/1"
-                ---
-                apiVersion: v1
-                kind: Service
-                metadata:
-                  name: product-service
-                  namespace: $(namespace)
-                spec:
-                  ports:
-                  - port: 8002
-                    targetPort: 8002
-                  selector:
-                    app: product-service
-          
-          # Deploy Order Service
-          - task: Kubernetes@1
-            displayName: Deploy Order Service
-            inputs:
-              connectionType: 'Azure Resource Manager'
-              azureSubscriptionEndpoint: 'azure-subscription-service-connection'
-              azureResourceGroup: '$(resourceGroupName)'
-              kubernetesCluster: '$(clusterName)'
-              namespace: '$(namespace)'
-              command: 'apply'
-              arguments: '-f - --validate=false'
-              secretType: 'dockerRegistry'
-              containerRegistryType: 'Azure Container Registry'
-              inputType: 'inline'
-              inline: |
-                apiVersion: apps/v1
-                kind: Deployment
-                metadata:
-                  name: order-service
-                  namespace: $(namespace)
-                spec:
-                  replicas: 2
-                  selector:
-                    matchLabels:
-                      app: order-service
-                  template:
-                    metadata:
-                      labels:
-                        app: order-service
-                    spec:
-                      imagePullSecrets:
-                      - name: acr-secret
-                      containers:
-                      - name: order-service
-                        image: $(containerRegistry)/$(imageRepository)/order-service:$(tag)
-                        ports:
-                        - containerPort: 8003
-                        env:
-                        - name: SQLALCHEMY_DATABASE_URL
-                          valueFrom:
-                            secretKeyRef:
-                              name: order-secrets
-                              key: SQLALCHEMY_DATABASE_URL
-                        - name: PRODUCT_SERVICE_URL
-                          value: "http://product-service:8002"
-                        - name: REDIS_URL
-                          value: "redis://redis:6379/2"
-                ---
-                apiVersion: v1
-                kind: Service
-                metadata:
-                  name: order-service
-                  namespace: $(namespace)
-                spec:
-                  ports:
-                  - port: 8003
-                    targetPort: 8003
-                  selector:
-                    app: order-service 
+              targetType: 'inline'
+              script: |
+                echo "Checking deployment status..."
+                kubectl get pods -n $(namespace)
+                kubectl get services -n $(namespace)
+                echo "Deployment completed at $(date)" 
