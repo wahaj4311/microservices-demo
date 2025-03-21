@@ -10,11 +10,11 @@ terraform {
     }
   }
   # Use local backend initially for simplicity
-  backend "local" {
-    path = "terraform.tfstate"
-  }
+  # backend "local" {
+  #   path = "terraform.tfstate"
+  # }
   # Uncomment this when you're ready to use Azure Storage as backend
-  # backend "azurerm" {}
+  backend "azurerm" {}
 }
 
 provider "azurerm" {
