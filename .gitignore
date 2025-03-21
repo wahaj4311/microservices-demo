@@ -22,6 +22,7 @@ agent.env
 
 # Kubernetes
 kubeconfig
+kubernetes-tr
 
 # Python
 __pycache__/
